@@ -1,3 +1,4 @@
+
 import { GeneratedImage, ImageEditParams, ImageGenerationParams } from "@/types/image";
 import { generateFilename, getImageFolder, dataURItoBlob } from "@/lib/utils";
 import { toast } from "sonner";
@@ -83,7 +84,7 @@ export const editImage = async (params: ImageEditParams): Promise<GeneratedImage
     const formData = new FormData();
     formData.append('model', 'gpt-image-1');
     formData.append('prompt', params.prompt);
-    formData.append('response_format', 'b64_json');
+    // Removed response_format as it's not supported for gpt-image-1
     
     if (typeof params.image === 'string' && params.image.startsWith('data:')) {
       const imageBlob = dataURItoBlob(params.image);
@@ -124,19 +125,26 @@ export const editImage = async (params: ImageEditParams): Promise<GeneratedImage
     }
 
     const data = await response.json();
+    console.log("Edit API response structure:", JSON.stringify(data, null, 2));
     
-    if (!data.data || !data.data[0] || !data.data[0].b64_json) {
+    if (!data.data || !data.data[0]) {
       console.error("Unexpected API response structure:", data);
       throw new Error("Invalid API response format");
     }
     
     const imageData = data.data[0];
+    // The gpt-image-1 model always returns base64-encoded images
+    const imageBase64 = imageData.b64_json;
+    
+    if (!imageBase64) {
+      throw new Error("No image data returned from API");
+    }
     
     const filename = generateFilename(`edited-${params.prompt}`);
     
     const generatedImage: GeneratedImage = {
       id: `img_edit_${Date.now()}`,
-      url: `data:image/png;base64,${imageData.b64_json}`,
+      url: `data:image/png;base64,${imageBase64}`,
       prompt: `Edit: ${params.prompt}`,
       timestamp: new Date(),
       filename: `${filename}.png`,

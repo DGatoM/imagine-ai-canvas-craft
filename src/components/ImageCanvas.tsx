@@ -163,7 +163,7 @@ const ImageCanvas: React.FC<ImageCanvasProps> = ({ imageUrl, brush, onMaskGenera
     const maskCanvas = maskCanvasRef.current;
     
     const maskDataUrl = maskCanvas.toDataURL('image/png');
-    console.log("Generated mask with white areas to be edited");
+    console.log("Generated mask with transparent areas to be edited");
     
     onMaskGenerated(maskDataUrl);
   };
