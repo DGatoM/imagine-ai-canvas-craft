@@ -1,4 +1,3 @@
-
 import { v4 as uuidv4 } from 'uuid';
 import { ImageGenerationParams, GeneratedImage, ImageEditParams } from '@/types/image';
 
@@ -65,7 +64,7 @@ export const generateImage = async (params: ImageGenerationParams): Promise<Gene
     id: uuidv4(),
     url: data.data[0].url,
     prompt: params.prompt,
-    timestamp: new Date().toISOString(),
+    timestamp: new Date(),
     params: {
       ...params
     }
@@ -114,7 +113,7 @@ export const editImage = async (params: ImageEditParams): Promise<GeneratedImage
     id: uuidv4(),
     url: data.data[0].url,
     prompt: params.prompt,
-    timestamp: new Date().toISOString(),
+    timestamp: new Date(),
     params: {
       ...params
     }
