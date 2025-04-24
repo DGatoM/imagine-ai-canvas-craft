@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { GeneratedImage } from "@/types/image";
 import ImageGenerationForm from "@/components/ImageGenerationForm";
@@ -35,10 +36,10 @@ const Index = () => {
           <div>
             <h1 className="text-3xl font-bold tracking-tight flex items-center">
               <Image className="h-8 w-8 mr-2 text-primary" />
-              AI Canvas Craft
+              Danilo Gato ImaGen
             </h1>
             <p className="text-muted-foreground mt-1">
-              Create, edit, and manage AI-generated images
+              Crie, edite e gerencie imagens geradas por IA
             </p>
           </div>
           <ApiKeyConfig />
@@ -48,7 +49,7 @@ const Index = () => {
           <ImageGenerationForm onImageGenerated={handleImageGenerated} />
           
           <div>
-            <h2 className="text-xl font-semibold mb-4">Generated Images</h2>
+            <h2 className="text-xl font-semibold mb-4">Imagens Geradas</h2>
             <ImageGallery 
               images={generatedImages} 
               onEditImage={handleEditImage} 

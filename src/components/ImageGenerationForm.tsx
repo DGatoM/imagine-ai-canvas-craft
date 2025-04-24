@@ -17,10 +17,11 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
-import { ImageGenerationParams, ImageSize } from "@/types/image";
-import { generateImage } from "@/services/imageService";
+import { ImageGenerationParams, ImageSize, ImageEditParams } from "@/types/image";
+import { generateImage, editImage } from "@/services/imageService";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Upload, Brush, Image as ImageIcon } from "lucide-react";
+import RabiscoCanvas from "./RabiscoCanvas";
 
 interface ImageGenerationFormProps {
   onImageGenerated: (result: any) => void;
@@ -31,56 +32,129 @@ export const ImageGenerationForm = ({ onImageGenerated }: ImageGenerationFormPro
   const [size, setSize] = useState<ImageSize>("1024x1024");
   const [quality, setQuality] = useState<"low" | "medium" | "high" | "auto">("auto");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [rabiscoOpen, setRabiscoOpen] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!prompt.trim()) {
-      toast.error("Please enter a prompt to generate an image");
+      toast.error("Por favor, insira uma instrução para gerar a imagem");
       return;
     }
     
     setIsGenerating(true);
     
     try {
-      const params: ImageGenerationParams = {
-        prompt,
-        size,
-        quality,
-      };
+      let result;
       
-      const result = await generateImage(params);
+      if (uploadedImage) {
+        // Se temos uma imagem, usamos a API de edição
+        const params: ImageEditParams = {
+          prompt,
+          size,
+          image: uploadedImage,
+        };
+        
+        result = await editImage(params);
+      } else {
+        // Caso contrário, geramos uma nova imagem
+        const params: ImageGenerationParams = {
+          prompt,
+          size,
+          quality,
+        };
+        
+        result = await generateImage(params);
+      }
       
       if (result) {
-        toast.success("Image generated successfully!");
+        toast.success("Imagem gerada com sucesso!");
         onImageGenerated(result);
-        // Don't clear form so user can make variations
+        // Não limpamos o formulário para que o usuário possa fazer variações
+        
+        // Limpar a imagem carregada após a geração
+        setUploadedImage(null);
       }
     } catch (error) {
-      console.error("Error generating image:", error);
-      toast.error("Failed to generate image. Please try again.");
+      console.error("Erro ao gerar imagem:", error);
+      toast.error("Falha ao gerar imagem. Por favor, tente novamente.");
     } finally {
       setIsGenerating(false);
     }
   };
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (typeof event.target?.result === 'string') {
+        setUploadedImage(event.target.result);
+        toast.success("Imagem carregada com sucesso!");
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRabiscoSave = (imageDataUrl: string) => {
+    setUploadedImage(imageDataUrl);
+    toast.success("Rabisco salvo e anexado ao prompt!");
+  };
+
+  const removeUploadedImage = () => {
+    setUploadedImage(null);
+    toast("Imagem removida");
+  };
+
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle>Generate AI Image</CardTitle>
+        <CardTitle>Gerar Imagem com IA</CardTitle>
         <CardDescription>
-          Create images with AI using natural language prompts
+          Crie imagens com Inteligência Artificial usando instruções em linguagem natural
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <label htmlFor="prompt" className="text-sm font-medium">
-              Prompt
-            </label>
+            <div className="flex items-center justify-between">
+              <label htmlFor="prompt" className="text-sm font-medium">
+                Instrução
+              </label>
+              <div className="flex gap-2">
+                <Button 
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setRabiscoOpen(true)}
+                >
+                  <Brush className="mr-2 h-4 w-4" />
+                  Rabisco
+                </Button>
+                <Button 
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  asChild
+                >
+                  <label>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload de Imagem
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="sr-only"
+                      onChange={handleImageUpload}
+                    />
+                  </label>
+                </Button>
+              </div>
+            </div>
             <Textarea
               id="prompt"
-              placeholder="Describe the image you want to generate..."
+              placeholder="Descreva a imagem que deseja gerar..."
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               className="min-h-24 font-mono"
@@ -88,10 +162,33 @@ export const ImageGenerationForm = ({ onImageGenerated }: ImageGenerationFormPro
             />
           </div>
 
+          {uploadedImage && (
+            <div className="border rounded-md p-2">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm font-medium">Imagem anexada</span>
+                <Button 
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={removeUploadedImage}
+                >
+                  Remover
+                </Button>
+              </div>
+              <div className="aspect-square w-24 h-24 relative">
+                <img 
+                  src={uploadedImage} 
+                  alt="Imagem carregada" 
+                  className="object-cover rounded-md w-full h-full"
+                />
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label htmlFor="size" className="text-sm font-medium">
-                Size
+                Tamanho
               </label>
               <Select 
                 value={size} 
@@ -99,19 +196,19 @@ export const ImageGenerationForm = ({ onImageGenerated }: ImageGenerationFormPro
                 disabled={isGenerating}
               >
                 <SelectTrigger id="size">
-                  <SelectValue placeholder="Select size" />
+                  <SelectValue placeholder="Selecione o tamanho" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="1024x1024">1024×1024 (Square)</SelectItem>
-                  <SelectItem value="1024x1536">1024×1536 (Portrait)</SelectItem>
-                  <SelectItem value="1536x1024">1536×1024 (Landscape)</SelectItem>
+                  <SelectItem value="1024x1024">1024×1024 (Quadrado)</SelectItem>
+                  <SelectItem value="1024x1536">1024×1536 (Retrato)</SelectItem>
+                  <SelectItem value="1536x1024">1536×1024 (Paisagem)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
               <label htmlFor="quality" className="text-sm font-medium">
-                Quality
+                Qualidade
               </label>
               <Select 
                 value={quality} 
@@ -119,13 +216,13 @@ export const ImageGenerationForm = ({ onImageGenerated }: ImageGenerationFormPro
                 disabled={isGenerating}
               >
                 <SelectTrigger id="quality">
-                  <SelectValue placeholder="Select quality" />
+                  <SelectValue placeholder="Selecione a qualidade" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="auto">Auto (Default)</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="auto">Auto (Padrão)</SelectItem>
+                  <SelectItem value="low">Baixa</SelectItem>
+                  <SelectItem value="medium">Média</SelectItem>
+                  <SelectItem value="high">Alta</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -139,14 +236,20 @@ export const ImageGenerationForm = ({ onImageGenerated }: ImageGenerationFormPro
             {isGenerating ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Generating...
+                Gerando...
               </>
             ) : (
-              "Generate Image"
+              "Gerar Imagem"
             )}
           </Button>
         </form>
       </CardContent>
+
+      <RabiscoCanvas 
+        isOpen={rabiscoOpen}
+        onClose={() => setRabiscoOpen(false)}
+        onSave={handleRabiscoSave}
+      />
     </Card>
   );
 };

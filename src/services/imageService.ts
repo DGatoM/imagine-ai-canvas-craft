@@ -20,7 +20,7 @@ export const getApiKey = (): string | null => {
 export const generateImage = async (params: ImageGenerationParams): Promise<GeneratedImage | null> => {
   try {
     if (!getApiKey()) {
-      toast.error("API key is required to generate images");
+      toast.error("É necessário uma chave de API para gerar imagens");
       return null;
     }
 
@@ -35,7 +35,7 @@ export const generateImage = async (params: ImageGenerationParams): Promise<Gene
       requestBody.quality = params.quality;
     }
     
-    console.log("Generating image with params:", JSON.stringify(requestBody));
+    console.log("Gerando imagem com parâmetros:", JSON.stringify(requestBody));
     
     const response = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
@@ -48,7 +48,7 @@ export const generateImage = async (params: ImageGenerationParams): Promise<Gene
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error?.message || 'Failed to generate image');
+      throw new Error(error.error?.message || 'Falha ao gerar imagem');
     }
 
     const data = await response.json();
@@ -68,8 +68,8 @@ export const generateImage = async (params: ImageGenerationParams): Promise<Gene
 
     return generatedImage;
   } catch (error) {
-    console.error('Error generating image:', error);
-    toast.error(`Failed to generate image: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error('Erro ao gerar imagem:', error);
+    toast.error(`Falha ao gerar imagem: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     return null;
   }
 };
@@ -77,7 +77,7 @@ export const generateImage = async (params: ImageGenerationParams): Promise<Gene
 export const editImage = async (params: ImageEditParams): Promise<GeneratedImage | null> => {
   try {
     if (!getApiKey()) {
-      toast.error("API key is required to edit images");
+      toast.error("É necessário uma chave de API para editar imagens");
       return null;
     }
 
@@ -89,26 +89,26 @@ export const editImage = async (params: ImageEditParams): Promise<GeneratedImage
     if (typeof params.image === 'string' && params.image.startsWith('data:')) {
       const imageBlob = dataURItoBlob(params.image);
       formData.append('image', imageBlob, 'image.png');
-      console.log("Added image to form data");
+      console.log("Imagem adicionada ao form data");
     } else if (params.image instanceof File) {
       formData.append('image', params.image);
-      console.log("Added image file to form data");
+      console.log("Arquivo de imagem adicionado ao form data");
     } else {
-      throw new Error('Invalid image format. Must be a data URL or File object.');
+      throw new Error('Formato de imagem inválido. Deve ser uma URL de dados ou objeto File.');
     }
 
     if (params.mask && typeof params.mask === 'string' && params.mask.startsWith('data:')) {
       const maskBlob = dataURItoBlob(params.mask);
       formData.append('mask', maskBlob, 'mask.png');
-      console.log("Added mask to form data");
+      console.log("Máscara adicionada ao form data");
     } else if (params.mask instanceof File) {
       formData.append('mask', params.mask);
-      console.log("Added mask file to form data");
+      console.log("Arquivo de máscara adicionado ao form data");
     }
 
     if (params.size) formData.append('size', params.size);
     
-    console.log("Sending edit request with params:", params.prompt, params.size);
+    console.log("Enviando solicitação de edição com parâmetros:", params.prompt, params.size);
     
     const response = await fetch('https://api.openai.com/v1/images/edits', {
       method: 'POST',
@@ -120,24 +120,24 @@ export const editImage = async (params: ImageEditParams): Promise<GeneratedImage
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error("API error response:", errorData);
-      throw new Error(errorData.error?.message || `Failed to edit image: ${response.status}`);
+      console.error("Erro na resposta da API:", errorData);
+      throw new Error(errorData.error?.message || `Falha ao editar imagem: ${response.status}`);
     }
 
     const data = await response.json();
-    console.log("Edit API response structure:", JSON.stringify(data, null, 2));
+    console.log("Estrutura de resposta da API de edição:", JSON.stringify(data, null, 2));
     
     if (!data.data || !data.data[0]) {
-      console.error("Unexpected API response structure:", data);
-      throw new Error("Invalid API response format");
+      console.error("Estrutura de resposta da API inesperada:", data);
+      throw new Error("Formato de resposta da API inválido");
     }
     
     const imageData = data.data[0];
-    // The gpt-image-1 model always returns base64-encoded images
+    // O modelo gpt-image-1 sempre retorna imagens codificadas em base64
     const imageBase64 = imageData.b64_json;
     
     if (!imageBase64) {
-      throw new Error("No image data returned from API");
+      throw new Error("Nenhum dado de imagem retornado pela API");
     }
     
     const filename = generateFilename(`edited-${params.prompt}`);
@@ -145,7 +145,7 @@ export const editImage = async (params: ImageEditParams): Promise<GeneratedImage
     const generatedImage: GeneratedImage = {
       id: `img_edit_${Date.now()}`,
       url: `data:image/png;base64,${imageBase64}`,
-      prompt: `Edit: ${params.prompt}`,
+      prompt: `Edição: ${params.prompt}`,
       timestamp: new Date(),
       filename: `${filename}.png`,
       params
@@ -153,8 +153,8 @@ export const editImage = async (params: ImageEditParams): Promise<GeneratedImage
     
     return generatedImage;
   } catch (error) {
-    console.error('Error editing image:', error);
-    toast.error(`Failed to edit image: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error('Erro ao editar imagem:', error);
+    toast.error(`Falha ao editar imagem: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     return null;
   }
 };
