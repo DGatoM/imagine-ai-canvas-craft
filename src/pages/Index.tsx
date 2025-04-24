@@ -23,6 +23,10 @@ const Index = () => {
     setIsEditorOpen(true);
   };
 
+  const handleDeleteImage = (imageId: string) => {
+    setGeneratedImages(prev => prev.filter(img => img.id !== imageId));
+  };
+
   const handleEditComplete = (editedImage: GeneratedImage) => {
     setGeneratedImages(prev => [editedImage, ...prev]);
     setIsEditorOpen(false);
@@ -53,6 +57,7 @@ const Index = () => {
             <ImageGallery 
               images={generatedImages} 
               onEditImage={handleEditImage} 
+              onDeleteImage={handleDeleteImage}
             />
           </div>
         </div>
