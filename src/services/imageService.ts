@@ -102,7 +102,8 @@ export const editImage = async (params: ImageEditParams): Promise<GeneratedImage
       throw new Error('Invalid image format. Must be a data URL or File object.');
     }
 
-    // Add the mask if provided
+    // Add the mask if provided - this should be a transparent PNG where the areas to edit are white
+    // and the areas to preserve are transparent
     if (params.mask && typeof params.mask === 'string' && params.mask.startsWith('data:')) {
       const maskBlob = dataURItoBlob(params.mask);
       formData.append('mask', maskBlob, 'mask.png');
@@ -143,7 +144,6 @@ export const editImage = async (params: ImageEditParams): Promise<GeneratedImage
     const imageData = data.data[0];
     
     const filename = generateFilename(`edited-${params.prompt}`);
-    const folder = getImageFolder();
     
     const generatedImage: GeneratedImage = {
       id: `img_edit_${Date.now()}`,

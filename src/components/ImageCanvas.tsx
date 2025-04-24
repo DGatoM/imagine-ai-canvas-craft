@@ -55,12 +55,11 @@ const ImageCanvas: React.FC<ImageCanvasProps> = ({ imageUrl, brush, onMaskGenera
     // Draw the image on main canvas
     ctx.drawImage(imageRef.current, 0, 0);
     
-    // Clear the mask canvas (transparent)
+    // Clear the mask canvas - should be fully transparent by default
     maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
     
-    // Make the mask fully transparent initially
+    // Initialize with a transparent canvas (all transparent - nothing to edit)
     maskCtx.globalAlpha = 0;
-    maskCtx.fillStyle = 'white';
     maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
     maskCtx.globalAlpha = 1;
   }, [canvasSize, imageLoaded]);
@@ -101,13 +100,13 @@ const ImageCanvas: React.FC<ImageCanvasProps> = ({ imageUrl, brush, onMaskGenera
     ctx.moveTo(x, y);
     maskCtx.moveTo(x, y);
     
-    // Configure drawing style for main canvas
+    // Configure drawing style for main canvas (visual indicator)
     ctx.strokeStyle = brush.color;
     ctx.fillStyle = brush.color;
     ctx.lineWidth = brush.size;
     ctx.lineCap = 'round';
     
-    // Configure drawing style for mask canvas - white on transparent
+    // Configure drawing style for mask canvas - WHITE for areas to be edited
     maskCtx.strokeStyle = 'white';
     maskCtx.fillStyle = 'white';
     maskCtx.lineWidth = brush.size;
@@ -185,12 +184,11 @@ const ImageCanvas: React.FC<ImageCanvasProps> = ({ imageUrl, brush, onMaskGenera
     if (!maskCanvasRef.current) return;
     
     const maskCanvas = maskCanvasRef.current;
-    const maskCtx = maskCanvas.getContext('2d');
-    
-    if (!maskCtx) return;
     
     // Generate data URL from the mask canvas directly
+    // This will provide a PNG with transparent background and white painted areas
     const maskDataUrl = maskCanvas.toDataURL('image/png');
+    console.log("Generated mask with white areas to be edited");
     
     // Call the callback with the mask data URL
     onMaskGenerated(maskDataUrl);
