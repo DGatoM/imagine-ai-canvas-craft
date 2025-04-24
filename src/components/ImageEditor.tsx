@@ -4,12 +4,18 @@ import ImageCanvas from './ImageCanvas';
 import { Brush } from '@/types/image';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { GeneratedImage, ImageEditParams, ImageSize } from '@/types/image';
 import { editImage } from '@/services/imageService';
 import { toast } from 'sonner';
 import { Loader2, Check } from 'lucide-react';
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
 
 interface ImageEditorProps {
   image: GeneratedImage;
@@ -27,6 +33,7 @@ const ImageEditor = ({ image, onEditComplete, onCancel }: ImageEditorProps) => {
   const [editPrompt, setEditPrompt] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [size, setSize] = useState<ImageSize>(image.params.size || '1024x1024');
+  const [quality, setQuality] = useState<"low" | "medium" | "high" | "auto">("auto");
 
   const handleBrushSizeChange = (value: number[]) => {
     setBrush({ ...brush, size: value[0] });
@@ -45,11 +52,15 @@ const ImageEditor = ({ image, onEditComplete, onCancel }: ImageEditorProps) => {
     setIsProcessing(true);
 
     try {
+      console.log("Starting edit with mask:", maskDataUrl ? "Mask provided" : "No mask");
+      
       // Prepare edit parameters
       const editParams: ImageEditParams = {
         prompt: editPrompt,
-        image: image.url, // In a real app, we'd use the actual image file
+        image: image.url,
         size,
+        quality,
+        model: "gpt-image-1", // Explicitly set the model
         ...(maskDataUrl && { mask: maskDataUrl })
       };
 
@@ -62,7 +73,7 @@ const ImageEditor = ({ image, onEditComplete, onCancel }: ImageEditorProps) => {
       }
     } catch (error) {
       console.error("Error editing image:", error);
-      toast.error("Failed to edit image. Please try again.");
+      toast.error(`Failed to edit image: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsProcessing(false);
     }
@@ -117,16 +128,39 @@ const ImageEditor = ({ image, onEditComplete, onCancel }: ImageEditorProps) => {
             <label htmlFor="size" className="block text-sm font-medium mb-1">
               Output Size
             </label>
-            <select
-              id="size"
-              value={size}
-              onChange={(e) => setSize(e.target.value as ImageSize)}
-              className="w-full px-3 py-2 bg-background border border-input rounded-md text-sm"
+            <Select 
+              value={size} 
+              onValueChange={(value) => setSize(value as ImageSize)}
             >
-              <option value="1024x1024">1024x1024 (Square)</option>
-              <option value="1024x1792">1024x1792 (Portrait)</option>
-              <option value="1792x1024">1792x1024 (Landscape)</option>
-            </select>
+              <SelectTrigger id="size">
+                <SelectValue placeholder="Select size" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1024x1024">1024×1024 (Square)</SelectItem>
+                <SelectItem value="1024x1536">1024×1536 (Portrait)</SelectItem>
+                <SelectItem value="1536x1024">1536×1024 (Landscape)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="mt-4">
+            <label htmlFor="quality" className="block text-sm font-medium mb-1">
+              Quality
+            </label>
+            <Select 
+              value={quality} 
+              onValueChange={(value) => setQuality(value as "low" | "medium" | "high" | "auto")}
+            >
+              <SelectTrigger id="quality">
+                <SelectValue placeholder="Select quality" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Auto (Default)</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           
           <div className="flex gap-2 mt-4">

@@ -6,6 +6,7 @@ export interface ImageGenerationParams {
   size: ImageSize;
   n?: number; // Default is 1
   quality?: "low" | "medium" | "high" | "auto"; // Correct values for gpt-image-1
+  model?: string; // Added model parameter
 }
 
 export interface ImageEditParams extends ImageGenerationParams {

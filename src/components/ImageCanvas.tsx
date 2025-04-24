@@ -10,6 +10,7 @@ interface ImageCanvasProps {
 
 const ImageCanvas: React.FC<ImageCanvasProps> = ({ imageUrl, brush, onMaskGenerated }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const maskCanvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
@@ -21,7 +22,7 @@ const ImageCanvas: React.FC<ImageCanvasProps> = ({ imageUrl, brush, onMaskGenera
 
     const img = new Image();
     img.onload = () => {
-      if (canvasRef.current) {
+      if (canvasRef.current && maskCanvasRef.current) {
         // Set canvas dimensions to match image
         setCanvasSize({ width: img.width, height: img.height });
         imageRef.current = img;
@@ -31,34 +32,46 @@ const ImageCanvas: React.FC<ImageCanvasProps> = ({ imageUrl, brush, onMaskGenera
     img.src = imageUrl;
   }, [imageUrl]);
 
-  // Draw image and existing mask on canvas when image loads
+  // Draw image on canvas when image loads
   useEffect(() => {
-    if (!canvasRef.current || !imageRef.current || !imageLoaded) return;
+    if (!canvasRef.current || !maskCanvasRef.current || !imageRef.current || !imageLoaded) return;
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     
-    if (!ctx) return;
+    const maskCanvas = maskCanvasRef.current;
+    const maskCtx = maskCanvas.getContext('2d', { willReadFrequently: true });
+    
+    if (!ctx || !maskCtx) return;
     
     // Set canvas dimensions
     canvas.width = canvasSize.width;
     canvas.height = canvasSize.height;
     
-    // Draw the image
+    // Set mask canvas dimensions (same as main canvas)
+    maskCanvas.width = canvasSize.width;
+    maskCanvas.height = canvasSize.height;
+    
+    // Draw the image on main canvas
     ctx.drawImage(imageRef.current, 0, 0);
+    
+    // Clear the mask canvas (transparent)
+    maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
   }, [canvasSize, imageLoaded]);
 
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current) return;
+    if (!canvasRef.current || !maskCanvasRef.current) return;
     setIsDrawing(true);
     
-    const ctx = canvasRef.current.getContext('2d');
-    if (!ctx) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
     
-    ctx.beginPath();
+    const maskCanvas = maskCanvasRef.current;
+    const maskCtx = maskCanvas.getContext('2d');
+    
+    if (!ctx || !maskCtx) return;
     
     // Get current position
-    const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
@@ -75,29 +88,52 @@ const ImageCanvas: React.FC<ImageCanvasProps> = ({ imageUrl, brush, onMaskGenera
       y = (e.clientY - rect.top) * scaleY;
     }
     
-    ctx.moveTo(x, y);
+    // Begin paths for both canvases
+    ctx.beginPath();
+    maskCtx.beginPath();
     
-    // Configure drawing style
+    ctx.moveTo(x, y);
+    maskCtx.moveTo(x, y);
+    
+    // Configure drawing style for main canvas
     ctx.strokeStyle = brush.color;
     ctx.fillStyle = brush.color;
     ctx.lineWidth = brush.size;
     ctx.lineCap = 'round';
     
-    // Draw a starting dot
+    // Configure drawing style for mask canvas - white on transparent
+    maskCtx.strokeStyle = 'white';
+    maskCtx.fillStyle = 'white';
+    maskCtx.lineWidth = brush.size;
+    maskCtx.lineCap = 'round';
+    
+    // Draw starting dots
     ctx.arc(x, y, brush.size / 2, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
     ctx.moveTo(x, y);
+    
+    maskCtx.arc(x, y, brush.size / 2, 0, Math.PI * 2);
+    maskCtx.fill();
+    maskCtx.beginPath();
+    maskCtx.moveTo(x, y);
+    
+    // Generate mask after each draw action
+    generateMask();
   };
   
   const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || !canvasRef.current) return;
+    if (!isDrawing || !canvasRef.current || !maskCanvasRef.current) return;
     
-    const ctx = canvasRef.current.getContext('2d');
-    if (!ctx) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    
+    const maskCanvas = maskCanvasRef.current;
+    const maskCtx = maskCanvas.getContext('2d');
+    
+    if (!ctx || !maskCtx) return;
     
     // Get current position
-    const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
@@ -114,86 +150,42 @@ const ImageCanvas: React.FC<ImageCanvasProps> = ({ imageUrl, brush, onMaskGenera
       y = (e.clientY - rect.top) * scaleY;
     }
     
+    // Draw lines on both canvases
     ctx.lineTo(x, y);
     ctx.stroke();
+    
+    maskCtx.lineTo(x, y);
+    maskCtx.stroke();
   };
   
   const stopDrawing = () => {
-    if (!isDrawing || !canvasRef.current) return;
+    if (!isDrawing || !canvasRef.current || !maskCanvasRef.current) return;
     
     setIsDrawing(false);
     
     const ctx = canvasRef.current.getContext('2d');
-    if (!ctx) return;
+    const maskCtx = maskCanvasRef.current.getContext('2d');
+    
+    if (!ctx || !maskCtx) return;
     
     ctx.closePath();
+    maskCtx.closePath();
     
     // Generate and pass the mask data URL
     generateMask();
   };
 
   const generateMask = () => {
-    if (!canvasRef.current || !imageRef.current) return;
+    if (!maskCanvasRef.current) return;
     
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    // Create a temporary canvas for the mask
-    const maskCanvas = document.createElement('canvas');
-    maskCanvas.width = canvas.width;
-    maskCanvas.height = canvas.height;
+    const maskCanvas = maskCanvasRef.current;
     const maskCtx = maskCanvas.getContext('2d');
     
     if (!maskCtx) return;
     
-    // Get the image data from our canvas (which has both the image and mask)
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const pixelData = imageData.data;
-    
-    // Create a new image data for the mask
-    const maskData = maskCtx.createImageData(canvas.width, canvas.height);
-    const maskPixelData = maskData.data;
-    
-    // Create a reference image data from the original image
-    const referenceCanvas = document.createElement('canvas');
-    referenceCanvas.width = canvas.width;
-    referenceCanvas.height = canvas.height;
-    const referenceCtx = referenceCanvas.getContext('2d');
-    
-    if (!referenceCtx) return;
-    
-    // Draw the original image to the reference canvas
-    referenceCtx.drawImage(imageRef.current, 0, 0, canvas.width, canvas.height);
-    const referenceData = referenceCtx.getImageData(0, 0, canvas.width, canvas.height);
-    const referencePixelData = referenceData.data;
-    
-    // Compare the current canvas with the reference to identify the mask
-    for (let i = 0; i < pixelData.length; i += 4) {
-      // If the pixel is different from the original image, it's part of the mask
-      if (
-        pixelData[i] !== referencePixelData[i] ||
-        pixelData[i + 1] !== referencePixelData[i + 1] ||
-        pixelData[i + 2] !== referencePixelData[i + 2]
-      ) {
-        // Set white pixel for the mask
-        maskPixelData[i] = 255;
-        maskPixelData[i + 1] = 255;
-        maskPixelData[i + 2] = 255;
-        maskPixelData[i + 3] = 255; // Full opacity
-      } else {
-        // Set transparent pixel
-        maskPixelData[i] = 0;
-        maskPixelData[i + 1] = 0;
-        maskPixelData[i + 2] = 0;
-        maskPixelData[i + 3] = 0; // Fully transparent
-      }
-    }
-    
-    // Put the mask data to the mask canvas
-    maskCtx.putImageData(maskData, 0, 0);
-    
-    // Generate data URL from the mask canvas
+    // Generate data URL from the mask canvas directly
+    // This will ensure we have a white area where the user painted (to be edited)
+    // and transparent elsewhere (to be preserved)
     const maskDataUrl = maskCanvas.toDataURL('image/png');
     
     // Call the callback with the mask data URL
@@ -201,14 +193,22 @@ const ImageCanvas: React.FC<ImageCanvasProps> = ({ imageUrl, brush, onMaskGenera
   };
 
   const clearMask = () => {
-    if (!canvasRef.current || !imageRef.current) return;
+    if (!canvasRef.current || !maskCanvasRef.current || !imageRef.current) return;
     
-    const ctx = canvasRef.current.getContext('2d');
-    if (!ctx) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
     
-    // Redraw the original image
+    const maskCanvas = maskCanvasRef.current;
+    const maskCtx = maskCanvas.getContext('2d');
+    
+    if (!ctx || !maskCtx || !imageRef.current) return;
+    
+    // Redraw the original image on main canvas
     ctx.clearRect(0, 0, canvasSize.width, canvasSize.height);
     ctx.drawImage(imageRef.current, 0, 0);
+    
+    // Clear the mask canvas
+    maskCtx.clearRect(0, 0, canvasSize.width, canvasSize.height);
     
     // Generate an empty mask
     onMaskGenerated('');
@@ -217,6 +217,7 @@ const ImageCanvas: React.FC<ImageCanvasProps> = ({ imageUrl, brush, onMaskGenera
   return (
     <div className="relative w-full flex flex-col items-center">
       <div className="relative border border-border rounded-md overflow-hidden bg-canvas-background">
+        {/* Main canvas where user draws and sees the image */}
         <canvas
           ref={canvasRef}
           className="max-w-full touch-none"
@@ -233,6 +234,14 @@ const ImageCanvas: React.FC<ImageCanvasProps> = ({ imageUrl, brush, onMaskGenera
           onTouchStart={startDrawing}
           onTouchMove={draw}
           onTouchEnd={stopDrawing}
+        />
+        
+        {/* Hidden mask canvas used for generating the mask */}
+        <canvas
+          ref={maskCanvasRef}
+          className="hidden"
+          width={canvasSize.width}
+          height={canvasSize.height}
         />
       </div>
       <button 

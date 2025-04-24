@@ -36,8 +36,8 @@ export const generateImage = async (params: ImageGenerationParams): Promise<Gene
     if (params.quality) {
       requestBody.quality = params.quality;
     }
-
-    // Note: 'style' parameter is removed as it's not supported by gpt-image-1
+    
+    console.log("Generating image with params:", JSON.stringify(requestBody));
     
     const response = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
@@ -85,28 +85,37 @@ export const editImage = async (params: ImageEditParams): Promise<GeneratedImage
 
     // Create form data for the request
     const formData = new FormData();
-    formData.append('model', 'gpt-image-1');
+    formData.append('model', params.model || 'gpt-image-1');
     formData.append('prompt', params.prompt);
     
-    // Add the image file
-    if (typeof params.image === 'string') {
-      // Convert data URL to blob
-      const blob = dataURItoBlob(params.image);
-      formData.append('image[]', blob);
+    // Convert image data URL to blob and append to formData
+    if (typeof params.image === 'string' && params.image.startsWith('data:')) {
+      const imageBlob = dataURItoBlob(params.image);
+      formData.append('image', imageBlob, 'image.png');
+      console.log("Added image to form data");
+    } else if (params.image instanceof File) {
+      formData.append('image', params.image);
+      console.log("Added image file to form data");
     } else {
-      formData.append('image[]', params.image);
+      throw new Error('Invalid image format. Must be a data URL or File object.');
     }
 
     // Add the mask if provided
-    if (params.mask) {
-      const maskBlob = typeof params.mask === 'string' ? dataURItoBlob(params.mask) : params.mask;
-      formData.append('mask', maskBlob);
+    if (params.mask && typeof params.mask === 'string' && params.mask.startsWith('data:')) {
+      const maskBlob = dataURItoBlob(params.mask);
+      formData.append('mask', maskBlob, 'mask.png');
+      console.log("Added mask to form data");
+    } else if (params.mask instanceof File) {
+      formData.append('mask', params.mask);
+      console.log("Added mask file to form data");
     }
 
     // Add other parameters
-    if (params.quality) formData.append('quality', params.quality);
     if (params.size) formData.append('size', params.size);
-
+    if (params.quality) formData.append('quality', params.quality);
+    
+    console.log("Sending edit request with params:", params.prompt, params.size, params.quality);
+    
     const response = await fetch('https://api.openai.com/v1/images/edits', {
       method: 'POST',
       headers: {
@@ -116,11 +125,18 @@ export const editImage = async (params: ImageEditParams): Promise<GeneratedImage
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error?.message || 'Failed to edit image');
+      const errorData = await response.json();
+      console.error("API error response:", errorData);
+      throw new Error(errorData.error?.message || `Failed to edit image: ${response.status}`);
     }
 
     const data = await response.json();
+    
+    if (!data.data || !data.data[0] || !data.data[0].b64_json) {
+      console.error("Unexpected API response structure:", data);
+      throw new Error("Invalid API response format");
+    }
+    
     const imageData = data.data[0];
     
     const filename = generateFilename(`edited-${params.prompt}`);
