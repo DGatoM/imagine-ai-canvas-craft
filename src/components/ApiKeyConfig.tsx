@@ -15,32 +15,37 @@ import { toast } from "sonner";
 import { Key } from "lucide-react";
 
 const ApiKeyConfig = () => {
-  const [apiKey, setApiKeyState] = useState<string>(
-    "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"
-  );
+  const [apiKey, setApiKeyState] = useState<string>("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isKeySet, setIsKeySet] = useState(false);
 
   useEffect(() => {
     const savedKey = getApiKey();
     setIsKeySet(!!savedKey);
-    
-    if (!savedKey) {
-      // Automatically save the key if not already set
-      handleSaveKey();
-    }
+    setApiKeyState(savedKey || "");
   }, []);
 
   const handleSaveKey = () => {
-    if (!apiKey.trim()) {
+    const trimmedKey = apiKey.trim();
+    if (!trimmedKey) {
       toast.error("Por favor, insira uma chave de API válida");
       return;
     }
 
-    setApiKey(apiKey);
-    setIsKeySet(true);
-    setIsDialogOpen(false);
-    toast.success("Chave de API salva com sucesso");
+    // Validate the key format (basic check)
+    if (!trimmedKey.startsWith('sk-proj-')) {
+      toast.error("Formato de chave de API inválido");
+      return;
+    }
+
+    try {
+      setApiKey(trimmedKey);
+      setIsKeySet(true);
+      setIsDialogOpen(false);
+      toast.success("Chave de API salva com sucesso");
+    } catch (error) {
+      toast.error("Erro ao salvar a chave de API");
+    }
   };
 
   const handleRemoveKey = () => {
@@ -118,3 +123,4 @@ const ApiKeyConfig = () => {
 };
 
 export default ApiKeyConfig;
+
