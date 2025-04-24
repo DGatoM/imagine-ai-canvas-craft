@@ -32,20 +32,32 @@ const ApiKeyConfig = () => {
       return;
     }
 
-    // Validate the key format (basic check)
-    if (!trimmedKey.startsWith('sk-proj-')) {
+    // Validar apenas se a chave começa com o formato correto
+    if (!trimmedKey.startsWith('sk-')) {
       toast.error("Formato de chave de API inválido");
       return;
     }
 
     try {
+      // Definir a chave de API no serviço
       setApiKey(trimmedKey);
       setIsKeySet(true);
       setIsDialogOpen(false);
       toast.success("Chave de API salva com sucesso");
+      
+      // Para facilitar o debug, mostrar parte da chave salva
+      console.log("Chave salva com sucesso, primeiros 10 caracteres:", trimmedKey.substring(0, 10) + "...");
     } catch (error) {
       toast.error("Erro ao salvar a chave de API");
+      console.error("Erro ao salvar chave:", error);
     }
+  };
+
+  // Atualizar a chave explicitamente com a fornecida pelo usuário
+  const setFixedKey = () => {
+    const fixedKey = "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";
+    setApiKeyState(fixedKey);
+    setTimeout(() => handleSaveKey(), 100);
   };
 
   const handleRemoveKey = () => {
@@ -57,15 +69,28 @@ const ApiKeyConfig = () => {
 
   return (
     <>
-      <Button 
-        variant="outline" 
-        size="sm" 
-        onClick={() => setIsDialogOpen(true)}
-        className="flex items-center gap-1"
-      >
-        <Key className="h-4 w-4 mr-1" />
-        {isKeySet ? "API Key ●●●●●" : "Definir Chave de API"}
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => setIsDialogOpen(true)}
+          className="flex items-center gap-1"
+        >
+          <Key className="h-4 w-4 mr-1" />
+          {isKeySet ? "API Key ●●●●●" : "Definir Chave de API"}
+        </Button>
+        
+        {!isKeySet && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={setFixedKey}
+            className="flex items-center"
+          >
+            Usar Chave Fornecida
+          </Button>
+        )}
+      </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
@@ -123,4 +148,3 @@ const ApiKeyConfig = () => {
 };
 
 export default ApiKeyConfig;
-

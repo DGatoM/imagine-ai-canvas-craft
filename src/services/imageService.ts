@@ -6,13 +6,16 @@ import { toast } from "sonner";
 let API_KEY: string | null = null;
 
 export const setApiKey = (key: string) => {
-  // Validate key format before saving
-  if (!key.startsWith('sk-proj-')) {
+  // Validar apenas se a chave começa com o formato correto
+  if (!key.startsWith('sk-')) {
     throw new Error('Invalid API key format');
   }
   
-  API_KEY = key;
-  localStorage.setItem('gpt_image_api_key', key);
+  // Remover qualquer espaço em branco que possa estar presente
+  const cleanKey = key.trim();
+  
+  API_KEY = cleanKey;
+  localStorage.setItem('gpt_image_api_key', cleanKey);
 };
 
 export const getApiKey = (): string | null => {
