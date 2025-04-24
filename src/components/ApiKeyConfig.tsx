@@ -32,9 +32,9 @@ const ApiKeyConfig = () => {
       return;
     }
 
-    // Validar apenas se a chave começa com o formato correto
-    if (!trimmedKey.startsWith('sk-')) {
-      toast.error("Formato de chave de API inválido");
+    // Validar o formato correto da chave
+    if (!trimmedKey.startsWith('sk-proj-')) {
+      toast.error("Formato de chave de API inválido. A chave deve começar com sk-proj-");
       return;
     }
 

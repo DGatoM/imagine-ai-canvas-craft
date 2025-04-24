@@ -6,9 +6,9 @@ import { toast } from "sonner";
 let API_KEY: string | null = null;
 
 export const setApiKey = (key: string) => {
-  // Validar apenas se a chave começa com o formato correto
-  if (!key.startsWith('sk-')) {
-    throw new Error('Invalid API key format');
+  // Validar com o formato correto para chaves de projeto
+  if (!key.startsWith('sk-proj-')) {
+    throw new Error('Formato de chave de API inválido. A chave deve começar com sk-proj-');
   }
   
   // Remover qualquer espaço em branco que possa estar presente
