@@ -24,25 +24,33 @@ export const generateImage = async (params: ImageGenerationParams): Promise<Gene
       return null;
     }
 
+    // Create request body based on model type
+    const requestBody: any = {
+      model: "gpt-image-1",
+      prompt: params.prompt,
+      n: params.n || 1,
+      size: params.size,
+    };
+
+    // Add quality parameter only if provided
+    if (params.quality) {
+      requestBody.quality = params.quality;
+    }
+
+    // Note: 'style' parameter is removed as it's not supported by gpt-image-1
+    
     const response = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${getApiKey()}`
       },
-      body: JSON.stringify({
-        model: "gpt-image-1",
-        prompt: params.prompt,
-        n: params.n || 1,
-        size: params.size,
-        quality: params.quality || "auto",
-        style: params.style || "natural",
-      })
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.message || 'Failed to generate image');
+      throw new Error(error.error?.message || 'Failed to generate image');
     }
 
     const data = await response.json();
@@ -109,7 +117,7 @@ export const editImage = async (params: ImageEditParams): Promise<GeneratedImage
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.message || 'Failed to edit image');
+      throw new Error(error.error?.message || 'Failed to edit image');
     }
 
     const data = await response.json();

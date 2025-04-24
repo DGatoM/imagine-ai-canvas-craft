@@ -1,7 +1,6 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { 
   Card, 
@@ -31,7 +30,6 @@ export const ImageGenerationForm = ({ onImageGenerated }: ImageGenerationFormPro
   const [prompt, setPrompt] = useState("");
   const [size, setSize] = useState<ImageSize>("1024x1024");
   const [quality, setQuality] = useState<"standard" | "hd">("standard");
-  const [style, setStyle] = useState<"natural" | "vivid">("natural");
   const [isGenerating, setIsGenerating] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -49,7 +47,6 @@ export const ImageGenerationForm = ({ onImageGenerated }: ImageGenerationFormPro
         prompt,
         size,
         quality,
-        style,
       };
       
       const result = await generateImage(params);
@@ -91,7 +88,7 @@ export const ImageGenerationForm = ({ onImageGenerated }: ImageGenerationFormPro
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label htmlFor="size" className="text-sm font-medium">
                 Size
@@ -106,8 +103,8 @@ export const ImageGenerationForm = ({ onImageGenerated }: ImageGenerationFormPro
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="1024x1024">1024×1024 (Square)</SelectItem>
-                  <SelectItem value="1024x1792">1024×1792 (Portrait)</SelectItem>
-                  <SelectItem value="1792x1024">1792×1024 (Landscape)</SelectItem>
+                  <SelectItem value="1024x1536">1024×1536 (Portrait)</SelectItem>
+                  <SelectItem value="1536x1024">1536×1024 (Landscape)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -127,25 +124,6 @@ export const ImageGenerationForm = ({ onImageGenerated }: ImageGenerationFormPro
                 <SelectContent>
                   <SelectItem value="standard">Standard</SelectItem>
                   <SelectItem value="hd">HD</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="style" className="text-sm font-medium">
-                Style
-              </label>
-              <Select 
-                value={style} 
-                onValueChange={(value) => setStyle(value as "natural" | "vivid")}
-                disabled={isGenerating}
-              >
-                <SelectTrigger id="style">
-                  <SelectValue placeholder="Select style" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="natural">Natural</SelectItem>
-                  <SelectItem value="vivid">Vivid</SelectItem>
                 </SelectContent>
               </Select>
             </div>
