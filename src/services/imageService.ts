@@ -85,7 +85,9 @@ export const editImage = async (params: ImageEditParams): Promise<GeneratedImage
 
     // Create form data for the request
     const formData = new FormData();
-    formData.append('model', params.model || 'gpt-image-1');
+    
+    // Set the model to gpt-image-1 explicitly
+    formData.append('model', 'gpt-image-1');
     formData.append('prompt', params.prompt);
     
     // Convert image data URL to blob and append to formData
@@ -113,6 +115,7 @@ export const editImage = async (params: ImageEditParams): Promise<GeneratedImage
     // Add other parameters
     if (params.size) formData.append('size', params.size);
     if (params.quality) formData.append('quality', params.quality);
+    if (params.n) formData.append('n', params.n.toString());
     
     console.log("Sending edit request with params:", params.prompt, params.size, params.quality);
     

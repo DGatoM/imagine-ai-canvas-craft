@@ -41,6 +41,7 @@ const ImageEditor = ({ image, onEditComplete, onCancel }: ImageEditorProps) => {
 
   const handleMaskGenerated = (maskUrl: string) => {
     setMaskDataUrl(maskUrl);
+    console.log("Mask generated with length:", maskUrl ? maskUrl.length : "empty");
   };
 
   const handleSubmitEdit = async () => {
@@ -70,6 +71,8 @@ const ImageEditor = ({ image, onEditComplete, onCancel }: ImageEditorProps) => {
       if (result) {
         toast.success("Image edited successfully!");
         onEditComplete(result);
+      } else {
+        throw new Error("Failed to edit image: No result returned");
       }
     } catch (error) {
       console.error("Error editing image:", error);

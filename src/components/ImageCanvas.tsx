@@ -57,6 +57,12 @@ const ImageCanvas: React.FC<ImageCanvasProps> = ({ imageUrl, brush, onMaskGenera
     
     // Clear the mask canvas (transparent)
     maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+    
+    // Make the mask fully transparent initially
+    maskCtx.globalAlpha = 0;
+    maskCtx.fillStyle = 'white';
+    maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+    maskCtx.globalAlpha = 1;
   }, [canvasSize, imageLoaded]);
 
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
@@ -184,8 +190,6 @@ const ImageCanvas: React.FC<ImageCanvasProps> = ({ imageUrl, brush, onMaskGenera
     if (!maskCtx) return;
     
     // Generate data URL from the mask canvas directly
-    // This will ensure we have a white area where the user painted (to be edited)
-    // and transparent elsewhere (to be preserved)
     const maskDataUrl = maskCanvas.toDataURL('image/png');
     
     // Call the callback with the mask data URL
