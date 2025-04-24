@@ -29,7 +29,7 @@ interface ImageGenerationFormProps {
 export const ImageGenerationForm = ({ onImageGenerated }: ImageGenerationFormProps) => {
   const [prompt, setPrompt] = useState("");
   const [size, setSize] = useState<ImageSize>("1024x1024");
-  const [quality, setQuality] = useState<"standard" | "hd">("standard");
+  const [quality, setQuality] = useState<"low" | "medium" | "high" | "auto">("auto");
   const [isGenerating, setIsGenerating] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -115,15 +115,17 @@ export const ImageGenerationForm = ({ onImageGenerated }: ImageGenerationFormPro
               </label>
               <Select 
                 value={quality} 
-                onValueChange={(value) => setQuality(value as "standard" | "hd")}
+                onValueChange={(value) => setQuality(value as "low" | "medium" | "high" | "auto")}
                 disabled={isGenerating}
               >
                 <SelectTrigger id="quality">
                   <SelectValue placeholder="Select quality" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="standard">Standard</SelectItem>
-                  <SelectItem value="hd">HD</SelectItem>
+                  <SelectItem value="auto">Auto (Default)</SelectItem>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
                 </SelectContent>
               </Select>
             </div>

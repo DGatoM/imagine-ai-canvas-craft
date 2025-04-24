@@ -5,7 +5,7 @@ export interface ImageGenerationParams {
   prompt: string;
   size: ImageSize;
   n?: number; // Default is 1
-  quality?: "standard" | "hd"; // Default is standard
+  quality?: "low" | "medium" | "high" | "auto"; // Correct values for gpt-image-1
 }
 
 export interface ImageEditParams extends ImageGenerationParams {
