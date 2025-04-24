@@ -20,21 +20,22 @@ const ApiKeyConfig = () => {
   const [isKeySet, setIsKeySet] = useState(false);
 
   useEffect(() => {
-    const savedKey = getApiKey();
-    setIsKeySet(!!savedKey);
-    setApiKeyState(savedKey || "");
+    try {
+      const savedKey = getApiKey();
+      setIsKeySet(!!savedKey);
+      if (savedKey) {
+        setApiKeyState(savedKey);
+      }
+    } catch (error) {
+      console.error("Erro ao carregar chave API:", error);
+      // Se houver erro ao carregar a chave, não impede o renderização
+    }
   }, []);
 
   const handleSaveKey = () => {
     const trimmedKey = apiKey.trim();
     if (!trimmedKey) {
       toast.error("Por favor, insira uma chave de API válida");
-      return;
-    }
-
-    // Validar o formato correto da chave
-    if (!trimmedKey.startsWith('sk-proj-')) {
-      toast.error("Formato de chave de API inválido. A chave deve começar com sk-proj-");
       return;
     }
 
@@ -48,7 +49,7 @@ const ApiKeyConfig = () => {
       // Para facilitar o debug, mostrar parte da chave salva
       console.log("Chave salva com sucesso, primeiros 10 caracteres:", trimmedKey.substring(0, 10) + "...");
     } catch (error) {
-      toast.error("Erro ao salvar a chave de API");
+      toast.error(`Erro ao salvar a chave de API: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
       console.error("Erro ao salvar chave:", error);
     }
   };
