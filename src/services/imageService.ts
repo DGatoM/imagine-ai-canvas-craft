@@ -1,4 +1,3 @@
-
 import { GeneratedImage, ImageEditParams, ImageGenerationParams } from "@/types/image";
 import { generateFilename, getImageFolder, dataURItoBlob } from "@/lib/utils";
 import { toast } from "sonner";
@@ -24,7 +23,6 @@ export const generateImage = async (params: ImageGenerationParams): Promise<Gene
       return null;
     }
 
-    // Create request body based on model type
     const requestBody: any = {
       model: "gpt-image-1",
       prompt: params.prompt,
@@ -32,7 +30,6 @@ export const generateImage = async (params: ImageGenerationParams): Promise<Gene
       size: params.size,
     };
 
-    // Add quality parameter only if provided
     if (params.quality) {
       requestBody.quality = params.quality;
     }
@@ -83,14 +80,11 @@ export const editImage = async (params: ImageEditParams): Promise<GeneratedImage
       return null;
     }
 
-    // Create form data for the request
     const formData = new FormData();
-    
-    // Set the model to gpt-image-1 explicitly
     formData.append('model', 'gpt-image-1');
     formData.append('prompt', params.prompt);
+    formData.append('response_format', 'b64_json');
     
-    // Convert image data URL to blob and append to formData
     if (typeof params.image === 'string' && params.image.startsWith('data:')) {
       const imageBlob = dataURItoBlob(params.image);
       formData.append('image', imageBlob, 'image.png');
@@ -102,8 +96,6 @@ export const editImage = async (params: ImageEditParams): Promise<GeneratedImage
       throw new Error('Invalid image format. Must be a data URL or File object.');
     }
 
-    // Add the mask if provided - this should be a transparent PNG where the areas to edit are white
-    // and the areas to preserve are transparent
     if (params.mask && typeof params.mask === 'string' && params.mask.startsWith('data:')) {
       const maskBlob = dataURItoBlob(params.mask);
       formData.append('mask', maskBlob, 'mask.png');
@@ -113,12 +105,9 @@ export const editImage = async (params: ImageEditParams): Promise<GeneratedImage
       console.log("Added mask file to form data");
     }
 
-    // Add other parameters
     if (params.size) formData.append('size', params.size);
-    if (params.quality) formData.append('quality', params.quality);
-    if (params.n) formData.append('n', params.n.toString());
     
-    console.log("Sending edit request with params:", params.prompt, params.size, params.quality);
+    console.log("Sending edit request with params:", params.prompt, params.size);
     
     const response = await fetch('https://api.openai.com/v1/images/edits', {
       method: 'POST',
