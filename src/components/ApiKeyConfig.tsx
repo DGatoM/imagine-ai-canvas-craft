@@ -9,6 +9,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -20,92 +21,60 @@ const ApiKeyConfig = () => {
   const [isKeySet, setIsKeySet] = useState(false);
 
   useEffect(() => {
-    try {
-      const savedKey = getApiKey();
-      setIsKeySet(!!savedKey);
-      if (savedKey) {
-        setApiKeyState(savedKey);
-      }
-    } catch (error) {
-      console.error("Erro ao carregar chave API:", error);
-      // Se houver erro ao carregar a chave, não impede o renderização
+    const savedKey = getApiKey();
+    setIsKeySet(!!savedKey);
+    
+    // Check if key is set
+    if (!savedKey) {
+      // Show dialog if no API key is set
+      setIsDialogOpen(true);
     }
   }, []);
 
   const handleSaveKey = () => {
-    const trimmedKey = apiKey.trim();
-    if (!trimmedKey) {
-      toast.error("Por favor, insira uma chave de API válida");
+    if (!apiKey.trim()) {
+      toast.error("Please enter a valid API key");
       return;
     }
 
-    try {
-      // Definir a chave de API no serviço
-      setApiKey(trimmedKey);
-      setIsKeySet(true);
-      setIsDialogOpen(false);
-      toast.success("Chave de API salva com sucesso");
-      
-      // Para facilitar o debug, mostrar parte da chave salva
-      console.log("Chave salva com sucesso, primeiros 10 caracteres:", trimmedKey.substring(0, 10) + "...");
-    } catch (error) {
-      toast.error(`Erro ao salvar a chave de API: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
-      console.error("Erro ao salvar chave:", error);
-    }
-  };
-
-  // Atualizar a chave explicitamente com a fornecida pelo usuário
-  const setFixedKey = () => {
-    const fixedKey = "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";
-    setApiKeyState(fixedKey);
-    setTimeout(() => handleSaveKey(), 100);
+    setApiKey(apiKey);
+    setIsKeySet(true);
+    setIsDialogOpen(false);
+    toast.success("API key saved successfully");
   };
 
   const handleRemoveKey = () => {
     setApiKey("");
     setApiKeyState("");
     setIsKeySet(false);
-    toast.info("Chave de API removida");
+    toast.info("API key removed");
   };
 
   return (
     <>
-      <div className="flex items-center gap-2">
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={() => setIsDialogOpen(true)}
-          className="flex items-center gap-1"
-        >
-          <Key className="h-4 w-4 mr-1" />
-          {isKeySet ? "API Key ●●●●●" : "Definir Chave de API"}
-        </Button>
-        
-        {!isKeySet && (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={setFixedKey}
-            className="flex items-center"
-          >
-            Usar Chave Fornecida
-          </Button>
-        )}
-      </div>
+      <Button 
+        variant="outline" 
+        size="sm" 
+        onClick={() => setIsDialogOpen(true)}
+        className="flex items-center gap-1"
+      >
+        <Key className="h-4 w-4 mr-1" />
+        {isKeySet ? "API Key ●●●●●" : "Set API Key"}
+      </Button>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Configurar Chave de API</DialogTitle>
+            <DialogTitle>Configure API Key</DialogTitle>
             <DialogDescription>
-              Insira sua chave de API da OpenAI. A chave é armazenada apenas no navegador local e nunca enviada para nossos servidores.
+              Enter your OpenAI API key to generate images. The key is stored in your local browser and never sent to our servers.
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <label htmlFor="apiKey" className="text-sm font-medium">
-                Chave de API OpenAI
+                OpenAI API Key
               </label>
               <Input
                 id="apiKey"
@@ -118,8 +87,8 @@ const ApiKeyConfig = () => {
             
             <div className="text-xs text-muted-foreground">
               <p>
-                Sua chave de API é armazenada apenas no armazenamento local do navegador.
-                Recomendamos usar uma chave com limites de uso apropriados.
+                Your API key is stored only in your browser's local storage.
+                We recommend using a key with appropriate usage limits.
               </p>
             </div>
           </div>
@@ -131,7 +100,7 @@ const ApiKeyConfig = () => {
                 onClick={handleRemoveKey}
                 type="button"
               >
-                Remover Chave
+                Remove Key
               </Button>
             )}
             <Button 
@@ -139,7 +108,7 @@ const ApiKeyConfig = () => {
               type="button"
               disabled={!apiKey.trim()}
             >
-              Salvar Chave
+              Save Key
             </Button>
           </DialogFooter>
         </DialogContent>
