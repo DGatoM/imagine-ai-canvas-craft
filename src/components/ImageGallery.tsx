@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { downloadImage } from "@/lib/utils";
 import { toast } from "sonner";
-import { Edit, Download, Trash2 } from "lucide-react";
+import { Edit, Download, Info } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -20,14 +20,9 @@ import {
 interface ImageGalleryProps {
   images: GeneratedImage[];
   onEditImage: (image: GeneratedImage) => void;
-  onDeleteImage?: (imageId: string) => void;
 }
 
-const ImageGallery = ({ 
-  images, 
-  onEditImage, 
-  onDeleteImage 
-}: ImageGalleryProps) => {
+const ImageGallery = ({ images, onEditImage }: ImageGalleryProps) => {
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
 
   const handleDownload = (image: GeneratedImage) => {
@@ -38,18 +33,11 @@ const ImageGallery = ({
           const url = window.URL.createObjectURL(blob);
           downloadImage(url, image.filename);
           window.URL.revokeObjectURL(url);
-          toast.success(`Imagem salva como ${image.filename}`);
+          toast.success(`Image saved as ${image.filename}`);
         });
     } catch (error) {
-      console.error("Erro ao baixar imagem:", error);
-      toast.error("Falha ao baixar imagem");
-    }
-  };
-
-  const handleDelete = (image: GeneratedImage) => {
-    if (onDeleteImage) {
-      onDeleteImage(image.id);
-      toast.success(`Imagem ${image.filename} excluída`);
+      console.error("Error downloading image:", error);
+      toast.error("Failed to download image");
     }
   };
 
@@ -57,9 +45,9 @@ const ImageGallery = ({
     return (
       <Card className="w-full bg-secondary/30 border border-dashed">
         <CardContent className="flex flex-col items-center justify-center h-64">
-          <p className="text-muted-foreground">Nenhuma imagem gerada ainda</p>
+          <p className="text-muted-foreground">No images generated yet</p>
           <p className="text-sm text-muted-foreground mt-1">
-            Gere sua primeira imagem digitando um prompt acima
+            Generate your first image by entering a prompt above
           </p>
         </CardContent>
       </Card>
@@ -101,11 +89,11 @@ const ImageGallery = ({
                     className="flex-1"
                   >
                     <Edit className="h-4 w-4 mr-2" />
-                    Editar
+                    Edit
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Editar esta imagem com máscara</p>
+                  <p>Edit this image with a mask</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -120,35 +108,14 @@ const ImageGallery = ({
                     className="flex-1"
                   >
                     <Download className="h-4 w-4 mr-2" />
-                    Salvar
+                    Save
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Baixar esta imagem</p>
+                  <p>Download this image</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-
-            {onDeleteImage && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button 
-                      variant="destructive" 
-                      size="sm"
-                      onClick={() => handleDelete(image)}
-                      className="flex-1"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Excluir
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Excluir esta imagem</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
           </CardFooter>
         </Card>
       ))}
