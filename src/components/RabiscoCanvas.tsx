@@ -1,7 +1,6 @@
-
 import React, { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Brush, Palette, Square, Image as ImageIcon, Upload, Save, Rectangle } from "lucide-react";
+import { Brush, Palette, Square, Image as ImageIcon, Upload, Save, RectangleHorizontal, RectangleVertical } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface RabiscoCanvasProps {
@@ -24,7 +23,6 @@ const RabiscoCanvas = ({ isOpen, onClose, onSave }: RabiscoCanvasProps) => {
   const [canvasSize, setCanvasSize] = useState({ width: 512, height: 512 });
   const [aspectRatio, setAspectRatio] = useState<"1:1" | "4:3" | "3:4">("1:1");
 
-  // Configurar o canvas quando o componente montar ou o tamanho mudar
   useEffect(() => {
     if (canvasRef.current) {
       const canvas = canvasRef.current;
@@ -44,7 +42,6 @@ const RabiscoCanvas = ({ isOpen, onClose, onSave }: RabiscoCanvasProps) => {
     }
   }, [canvasSize]);
 
-  // Atualizar a cor e tamanho do pincel quando mudarem
   useEffect(() => {
     if (ctx) {
       ctx.strokeStyle = color;
@@ -110,11 +107,9 @@ const RabiscoCanvas = ({ isOpen, onClose, onSave }: RabiscoCanvasProps) => {
       
       const img = new Image();
       img.onload = () => {
-        // Ajustar o tamanho do canvas à imagem mantendo a proporção
         let newWidth = img.width;
         let newHeight = img.height;
         
-        // Limitar o tamanho máximo para evitar problemas de desempenho
         const maxDimension = 1024;
         if (newWidth > maxDimension || newHeight > maxDimension) {
           const ratio = newWidth / newHeight;
@@ -132,13 +127,10 @@ const RabiscoCanvas = ({ isOpen, onClose, onSave }: RabiscoCanvasProps) => {
           height: newHeight
         });
         
-        // A imagem será desenhada no useEffect quando o canvas for redimensionado
         setTimeout(() => {
           if (ctx && canvasRef.current) {
-            // Limpar primeiro
             ctx.fillStyle = "#FFFFFF";
             ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-            // Desenhar a imagem
             ctx.drawImage(img, 0, 0, newWidth, newHeight);
           }
         }, 0);
@@ -220,7 +212,7 @@ const RabiscoCanvas = ({ isOpen, onClose, onSave }: RabiscoCanvasProps) => {
               onClick={() => setAspect("4:3")}
               className={aspectRatio === "4:3" ? "bg-primary text-primary-foreground" : ""}
             >
-              <Rectangle className="h-4 w-4 mr-1" />
+              <RectangleHorizontal className="h-4 w-4 mr-1" />
               Paisagem (4:3)
             </Button>
             <Button 
@@ -229,7 +221,7 @@ const RabiscoCanvas = ({ isOpen, onClose, onSave }: RabiscoCanvasProps) => {
               onClick={() => setAspect("3:4")}
               className={aspectRatio === "3:4" ? "bg-primary text-primary-foreground" : ""}
             >
-              <Rectangle className="h-4 w-4 mr-1 rotate-90" />
+              <RectangleVertical className="h-4 w-4 mr-1" />
               Retrato (3:4)
             </Button>
             
