@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { GeneratedImage } from "@/types/image";
 import ImageGenerationForm from "@/components/ImageGenerationForm";
@@ -7,7 +6,7 @@ import ImageEditor from "@/components/ImageEditor";
 import ApiKeyConfig from "@/components/ApiKeyConfig";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { brush, image } from "lucide-react";
+import { Image, Brush } from "lucide-react";
 
 const Index = () => {
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
@@ -35,7 +34,7 @@ const Index = () => {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight flex items-center">
-              <image className="h-8 w-8 mr-2 text-primary" />
+              <Image className="h-8 w-8 mr-2 text-primary" />
               AI Canvas Craft
             </h1>
             <p className="text-muted-foreground mt-1">
