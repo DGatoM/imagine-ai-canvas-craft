@@ -2,6 +2,7 @@
 import { GeneratedImage, ImageEditParams, ImageGenerationParams } from "@/types/image";
 import { generateFilename, getImageFolder, dataURItoBlob } from "@/lib/utils";
 import { toast } from "sonner";
+import { v4 as uuidv4 } from 'uuid';
 
 let API_KEY: string | null = null;
 
@@ -55,10 +56,9 @@ export const generateImage = async (params: ImageGenerationParams): Promise<Gene
     const imageData = data.data[0];
     
     const filename = generateFilename(params.prompt);
-    const folder = getImageFolder();
     
     const generatedImage: GeneratedImage = {
-      id: `img_${Date.now()}`,
+      id: uuidv4(),
       url: `data:image/png;base64,${imageData.b64_json}`,
       prompt: params.prompt,
       timestamp: new Date(),
@@ -84,7 +84,6 @@ export const editImage = async (params: ImageEditParams): Promise<GeneratedImage
     const formData = new FormData();
     formData.append('model', 'gpt-image-1');
     formData.append('prompt', params.prompt);
-    // Removed response_format as it's not supported for gpt-image-1
     
     if (typeof params.image === 'string' && params.image.startsWith('data:')) {
       const imageBlob = dataURItoBlob(params.image);
@@ -133,7 +132,6 @@ export const editImage = async (params: ImageEditParams): Promise<GeneratedImage
     }
     
     const imageData = data.data[0];
-    // O modelo gpt-image-1 sempre retorna imagens codificadas em base64
     const imageBase64 = imageData.b64_json;
     
     if (!imageBase64) {
@@ -143,7 +141,7 @@ export const editImage = async (params: ImageEditParams): Promise<GeneratedImage
     const filename = generateFilename(`edited-${params.prompt}`);
     
     const generatedImage: GeneratedImage = {
-      id: `img_edit_${Date.now()}`,
+      id: uuidv4(),
       url: `data:image/png;base64,${imageBase64}`,
       prompt: `Edição: ${params.prompt}`,
       timestamp: new Date(),

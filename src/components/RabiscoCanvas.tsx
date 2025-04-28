@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Brush, Palette, Square, Image as ImageIcon, Upload, Save, RectangleHorizontal, RectangleVertical } from "lucide-react";
@@ -49,15 +50,28 @@ const RabiscoCanvas = ({ isOpen, onClose, onSave }: RabiscoCanvasProps) => {
     }
   }, [color, brushSize, ctx]);
 
+  // Helper function to get correct coordinates with proper scaling
+  const getCanvasCoordinates = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current) return { x: 0, y: 0 };
+    
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    
+    // Calculate the scaling factor between the canvas element display size and its internal size
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    // Apply the scale to get accurate coordinates
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+    
+    return { x, y };
+  };
+
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!ctx) return;
     
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const { x, y } = getCanvasCoordinates(e);
     
     ctx.beginPath();
     ctx.moveTo(x, y);
@@ -67,12 +81,7 @@ const RabiscoCanvas = ({ isOpen, onClose, onSave }: RabiscoCanvasProps) => {
   const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isDrawing || !ctx) return;
     
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const { x, y } = getCanvasCoordinates(e);
     
     ctx.lineTo(x, y);
     ctx.stroke();
