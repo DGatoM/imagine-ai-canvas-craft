@@ -7,7 +7,7 @@ import {
   Upload, 
   Image as ImageIcon, 
   Play, 
-  Export 
+  FileUp 
 } from "lucide-react";
 import { 
   Card, 
@@ -221,7 +221,7 @@ const ScriptGen = () => {
                 )}
                 {step === 'videos' && (
                   <Button onClick={handleExportVideo}>
-                    <Export className="h-4 w-4 mr-2" />
+                    <FileUp className="h-4 w-4 mr-2" />
                     Exportar Vídeo
                   </Button>
                 )}
