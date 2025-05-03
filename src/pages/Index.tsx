@@ -4,10 +4,7 @@ import { GeneratedImage } from "@/types/image";
 import ImageGenerationForm from "@/components/ImageGenerationForm";
 import ImageGallery from "@/components/ImageGallery";
 import ImageEditor from "@/components/ImageEditor";
-import ApiKeyConfig from "@/components/ApiKeyConfig";
-import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Image, Brush } from "lucide-react";
 
 const Index = () => {
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
@@ -32,19 +29,6 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight flex items-center">
-              <Image className="h-8 w-8 mr-2 text-primary" />
-              Danilo Gato ImaGen
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Crie, edite e gerencie imagens geradas por IA
-            </p>
-          </div>
-          <ApiKeyConfig />
-        </div>
-
         <div className="grid grid-cols-1 gap-8">
           <ImageGenerationForm onImageGenerated={handleImageGenerated} />
           
