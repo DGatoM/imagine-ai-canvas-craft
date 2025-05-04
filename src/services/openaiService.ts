@@ -10,6 +10,7 @@ interface PromptSegment {
 export interface PromptGenerationParams {
   transcription: string;
   segments: Array<{ text: string; start: number; end: number; }>;
+  totalDuration?: number;
 }
 
 export const generatePrompts = async (
@@ -22,20 +23,19 @@ export const generatePrompts = async (
   }
 
   const systemPrompt = 
-    "Você vai receber a transcrição de um vídeo. Sua primeira tarefa é analisar a duração total do áudio (encontrando o timestamp final na transcrição), dividir por 5 para determinar quantos segmentos de 5 segundos são necessários, arredondando o último segmento para cima se necessário. Em seguida, crie um prompt em inglês para cada segmento de 5 segundos que ilustre o que está sendo dito naquele momento específico. Leve em consideração o contexto completo, incluindo o que foi dito antes e o que será dito depois, para que as imagens sejam coerentes entre si. As imagens sempre devem ser realistas, a não ser que o tema de uma determinada imagem possa ficar melhor com uma imagem estilizada.";
+    "Você vai receber a transcrição de um vídeo. Sua primeira tarefa é analisar a duração total do áudio (fornecida na solicitação), dividir por 5 para determinar quantos segmentos de 5 segundos são necessários, arredondando o último segmento para cima se necessário. Em seguida, crie um prompt em inglês para cada segmento de 5 segundos que ilustre o que está sendo dito naquele momento específico. Leve em consideração o contexto completo, incluindo o que foi dito antes e o que será dito depois, para que as imagens sejam coerentes entre si. As imagens sempre devem ser realistas, a não ser que o tema de uma determinada imagem possa ficar melhor com uma imagem estilizada.";
   
   try {
-    // Prepare a detailed user prompt with full transcription data including all timestamps
+    // Prepare a detailed user prompt with transcription data and explicit duration
     const userPrompt = `
-    Aqui está a transcrição completa de um áudio, incluindo timestamps: 
+    Aqui está a transcrição de um áudio:
     
     Texto completo: ${params.transcription}
     
-    Detalhes dos segmentos com timestamps:
-    ${JSON.stringify(params.segments, null, 2)}
+    Duração total do áudio: ${params.totalDuration || "Desconhecida"} segundos
     
     Sua tarefa:
-    1. Determine a duração total do áudio analisando os timestamps finais
+    1. Use a duração total de ${params.totalDuration || "Desconhecida"} segundos para dividir o áudio
     2. Divida essa duração em segmentos de 5 segundos (crie segmentos de 0:00-0:05, 0:05-0:10, etc.)
     3. Para cada segmento de 5 segundos, crie um prompt em inglês para geração de imagem que represente o que está sendo dito naquele trecho
     4. Retorne apenas um array JSON no formato abaixo (sem explicações adicionais):

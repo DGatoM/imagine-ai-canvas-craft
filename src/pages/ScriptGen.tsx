@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { 
@@ -101,20 +100,43 @@ const ScriptGen = () => {
       // Save the raw ElevenLabs response for debugging
       setRawElevenLabsResponse(JSON.stringify(transcriptionResult, null, 2));
       
+      // Extract the total duration of the audio from the segments
+      // Get the end time of the last segment or estimate from audio file duration
+      let totalDuration = 0;
+      if (transcriptionResult.segments && transcriptionResult.segments.length > 0) {
+        // Get the end time of the last segment
+        totalDuration = transcriptionResult.segments[transcriptionResult.segments.length - 1].end;
+      } else {
+        // Fallback: try to get duration from the audio file itself
+        try {
+          const audioElement = new Audio();
+          audioElement.src = URL.createObjectURL(uploadedAudio);
+          await new Promise(resolve => {
+            audioElement.onloadedmetadata = () => {
+              totalDuration = audioElement.duration;
+              resolve(null);
+            };
+          });
+        } catch (error) {
+          console.error("Não foi possível determinar a duração do áudio:", error);
+        }
+      }
+      
+      console.log("Duração total do áudio:", totalDuration, "segundos");
+      
       // Generate the default OpenAI prompt
       const systemPrompt = 
-        "Você vai receber a transcrição de um vídeo. Sua primeira tarefa é analisar a duração total do áudio (encontrando o timestamp final na transcrição), dividir por 5 para determinar quantos segmentos de 5 segundos são necessários, arredondando o último segmento para cima se necessário. Em seguida, crie um prompt em inglês para cada segmento de 5 segundos que ilustre o que está sendo dito naquele momento específico. Leve em consideração o contexto completo, incluindo o que foi dito antes e o que será dito depois, para que as imagens sejam coerentes entre si. As imagens sempre devem ser realistas, a não ser que o tema de uma determinada imagem possa ficar melhor com uma imagem estilizada.";
+        "Você vai receber a transcrição de um vídeo. Sua primeira tarefa é analisar a duração total do áudio (fornecida na solicitação), dividir por 5 para determinar quantos segmentos de 5 segundos são necessários, arredondando o último segmento para cima se necessário. Em seguida, crie um prompt em inglês para cada segmento de 5 segundos que ilustre o que está sendo dito naquele momento específico. Leve em consideração o contexto completo, incluindo o que foi dito antes e o que será dito depois, para que as imagens sejam coerentes entre si. As imagens sempre devem ser realistas, a não ser que o tema de uma determinada imagem possa ficar melhor com uma imagem estilizada.";
       
       const userPrompt = `
-      Aqui está a transcrição completa de um áudio, incluindo timestamps: 
+      Aqui está a transcrição de um áudio:
       
       Texto completo: ${transcriptionResult.text}
       
-      Detalhes dos segmentos com timestamps:
-      ${JSON.stringify(transcriptionResult.segments, null, 2)}
+      Duração total do áudio: ${totalDuration} segundos
       
       Sua tarefa:
-      1. Determine a duração total do áudio analisando os timestamps finais
+      1. Use a duração total de ${totalDuration} segundos para dividir o áudio
       2. Divida essa duração em segmentos de 5 segundos (crie segmentos de 0:00-0:05, 0:05-0:10, etc.)
       3. Para cada segmento de 5 segundos, crie um prompt em inglês para geração de imagem que represente o que está sendo dito naquele trecho
       4. Retorne apenas um array JSON no formato abaixo (sem explicações adicionais):
@@ -140,7 +162,8 @@ const ScriptGen = () => {
       // Step 2: Generate prompts from the transcription
       const promptParams: PromptGenerationParams = {
         transcription: transcriptionResult.text,
-        segments: transcriptionResult.segments || []
+        segments: transcriptionResult.segments || [],
+        totalDuration: totalDuration
       };
       
       const generatedPrompts = await generatePrompts(promptParams, openAIApiKey);
@@ -189,7 +212,7 @@ const ScriptGen = () => {
           messages: [
             {
               role: "system",
-              content: "Você vai receber a transcrição de um vídeo. Sua primeira tarefa é analisar a duração total do áudio (encontrando o timestamp final na transcrição), dividir por 5 para determinar quantos segmentos de 5 segundos são necessários, arredondando o último segmento para cima se necessário. Em seguida, crie um prompt em inglês para cada segmento de 5 segundos que ilustre o que está sendo dito naquele momento específico. Leve em consideração o contexto completo, incluindo o que foi dito antes e o que será dito depois, para que as imagens sejam coerentes entre si. As imagens sempre devem ser realistas, a não ser que o tema de uma determinada imagem possa ficar melhor com uma imagem estilizada."
+              content: "Você vai receber a transcrição de um vídeo. Sua primeira tarefa é analisar a duração total do áudio (fornecida na solicitação), dividir por 5 para determinar quantos segmentos de 5 segundos são necessários, arredondando o último segmento para cima se necessário. Em seguida, crie um prompt em inglês para cada segmento de 5 segundos que ilustre o que está sendo dito naquele momento específico. Leve em consideração o contexto completo, incluindo o que foi dito antes e o que será dito depois, para que as imagens sejam coerentes entre si. As imagens sempre devem ser realistas, a não ser que o tema de uma determinada imagem possa ficar melhor com uma imagem estilizada."
             },
             {
               role: "user",
@@ -569,4 +592,3 @@ const ScriptGen = () => {
 };
 
 export default ScriptGen;
-
