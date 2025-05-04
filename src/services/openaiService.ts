@@ -25,34 +25,42 @@ export const generatePrompts = async (
     "Você vai receber a transcrição de um vídeo. seu papel é entender o contexto do vídeo e gerar um prompt em inglês para criação de imagens em outra IA que vão mudar a cada 5 segundos e precisam ilustrar o que está sendo dito no momento, leve em consideração o todo e também o que foi dito anteriormente e o que será dito depois para que as imagens fiquem coerentes. As imagens sempre devem ser realistas, a não ser que o tema de uma determinada imagem possa ficar melhor com uma imagem estilizada";
   
   try {
-    // Prepare segments in 5-second chunks
+    // First, determine the total duration of the audio from the segments
     const segments = params.segments;
+    let totalDuration = 0;
+    
+    if (segments && segments.length > 0) {
+      // Find the max end time from all segments
+      totalDuration = Math.max(...segments.map(segment => segment.end));
+    }
+    
+    console.log("Total audio duration detected:", totalDuration, "seconds");
+    
+    // Create 5-second chunks covering the entire audio duration
     const fiveSecondChunks: Array<{ text: string; start: number; end: number; }> = [];
     
-    // Group segments into 5-second chunks
-    for (let i = 0; i < segments.length; i++) {
-      const segment = segments[i];
-      const segmentDuration = segment.end - segment.start;
-      let remainingDuration = segmentDuration;
-      let currentPosition = segment.start;
+    // Create chunks for every 5 seconds of the total duration
+    for (let chunkStart = 0; chunkStart < totalDuration; chunkStart += 5) {
+      const chunkEnd = Math.min(chunkStart + 5, totalDuration);
       
-      while (remainingDuration > 0) {
-        const chunkDuration = Math.min(remainingDuration, 5);
-        const chunkEnd = currentPosition + chunkDuration;
-        
-        // Calculate what portion of the text belongs to this chunk
-        const textPortion = segment.text;
-        
-        fiveSecondChunks.push({
-          text: textPortion,
-          start: currentPosition,
-          end: chunkEnd
-        });
-        
-        currentPosition = chunkEnd;
-        remainingDuration -= chunkDuration;
-      }
+      // Find text that overlaps with this chunk
+      const relevantSegments = segments.filter(
+        segment => (segment.start < chunkEnd && segment.end > chunkStart)
+      );
+      
+      // Combine text from all relevant segments
+      const combinedText = relevantSegments
+        .map(segment => segment.text)
+        .join(" ");
+      
+      fiveSecondChunks.push({
+        text: combinedText || "Silence",
+        start: chunkStart,
+        end: chunkEnd
+      });
     }
+    
+    console.log(`Generated ${fiveSecondChunks.length} five-second chunks`);
     
     const userPrompt = `
     Transcrição completa: 
