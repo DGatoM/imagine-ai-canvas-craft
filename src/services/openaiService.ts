@@ -28,7 +28,7 @@ export const generatePrompts = async (
   }
 
   const systemPrompt = 
-    "Você vai receber a transcrição de um vídeo. Sua primeira tarefa é analisar a duração total do áudio (fornecida na solicitação), dividir por 5 para determinar quantos segmentos de 5 segundos são necessários, arredondando o último segmento para cima se necessário. Em seguida, crie um prompt em inglês para cada segmento de 5 segundos que ilustre o que está sendo dito naquele momento específico. Leve em consideração o contexto completo, incluindo o que foi dito antes e o que será dito depois, para que as imagens sejam coerentes entre si. As imagens sempre devem ser realistas, a não ser que o tema de uma determinada imagem possa ficar melhor com uma imagem estilizada.";
+    "Você vai receber a transcrição de um vídeo. Sua tarefa é analisar a duração total do áudio (fornecida na solicitação) e dividi-la em segmentos de 5 segundos. É CRUCIAL que você SEMPRE arredonde para cima no último segmento, garantindo que TODA a duração seja coberta. Por exemplo, para um áudio de 27 segundos, você deve criar 6 segmentos (5 completos + 1 parcial). Para cada segmento, crie um prompt em inglês que ilustre o que está sendo dito naquele momento específico. Leve em consideração o contexto completo, incluindo o que foi dito antes e o que será dito depois, para que as imagens sejam coerentes entre si. As imagens sempre devem ser realistas, a não ser que o tema de uma determinada imagem possa ficar melhor com uma imagem estilizada.";
   
   try {
     // Prepare a detailed user prompt with transcription data and explicit duration from metadata
@@ -41,16 +41,17 @@ export const generatePrompts = async (
     
     Sua tarefa:
     1. Use a duração total de ${params.totalDuration} segundos para dividir o áudio
-    2. Divida essa duração em segmentos de 5 segundos (crie segmentos de 0:00-0:05, 0:05-0:10, etc.)
-    3. Para cada segmento de 5 segundos, crie um prompt em inglês para geração de imagem que represente o que está sendo dito naquele trecho
-    4. Retorne apenas um array JSON no formato abaixo (sem explicações adicionais):
+    2. Divida essa duração em segmentos de EXATAMENTE 5 segundos cada (crie segmentos de 0:00-0:05, 0:05-0:10, etc.)
+    3. IMPORTANTE: Se a duração não for divisível exatamente por 5, SEMPRE arredonde para cima e crie um segmento adicional para o tempo restante. Por exemplo, para um áudio de 27 segundos, você deve criar 6 segmentos (0:00-0:05, 0:05-0:10, 0:10-0:15, 0:15-0:20, 0:20-0:25, 0:25-0:27).
+    4. Para cada segmento, crie um prompt em inglês para geração de imagem que represente o que está sendo dito naquele trecho
+    5. Retorne apenas um array JSON no formato abaixo (sem explicações adicionais):
     [
       {
         "id": "1",
         "timestamp": "0:00 - 0:05",
         "prompt": "Prompt em inglês para este segmento"
       },
-      ...etc para cada segmento de 5 segundos até o final do áudio
+      ...etc para cada segmento até o final do áudio, certificando-se de cobrir toda a duração
     ]
     `;
     
