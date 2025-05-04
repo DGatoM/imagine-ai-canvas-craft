@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { 
@@ -50,6 +51,7 @@ const ScriptGen = () => {
   const [elevenLabsApiKey, setElevenLabsApiKey] = useState<string>("");
   const [openAIApiKey, setOpenAIApiKey] = useState<string>("");
   const [transcription, setTranscription] = useState<AudioTranscription | null>(null);
+  const [audioDuration, setAudioDuration] = useState<number>(0);
   
   // Debug states
   const [showDebug, setShowDebug] = useState<boolean>(false);
@@ -62,6 +64,26 @@ const ScriptGen = () => {
     const files = e.target.files;
     if (files && files.length > 0) {
       setUploadedAudio(files[0]);
+      
+      // Extract audio duration from the uploaded file
+      const audioElement = new Audio();
+      const objectUrl = URL.createObjectURL(files[0]);
+      
+      audioElement.src = objectUrl;
+      audioElement.addEventListener('loadedmetadata', () => {
+        const duration = audioElement.duration;
+        setAudioDuration(duration);
+        console.log("Audio duration extracted from file:", duration, "seconds");
+        
+        // Clean up object URL after getting metadata
+        URL.revokeObjectURL(objectUrl);
+      });
+      
+      audioElement.addEventListener('error', (err) => {
+        console.error("Error loading audio metadata:", err);
+        toast.error("Não foi possível determinar a duração do arquivo de áudio.");
+        URL.revokeObjectURL(objectUrl);
+      });
     }
   };
 
@@ -78,6 +100,11 @@ const ScriptGen = () => {
 
     if (!openAIApiKey) {
       toast.error("Por favor, forneça a chave de API da OpenAI");
+      return;
+    }
+
+    if (audioDuration <= 0) {
+      toast.error("Não foi possível determinar a duração do áudio. Tente carregar o arquivo novamente.");
       return;
     }
 
@@ -100,29 +127,7 @@ const ScriptGen = () => {
       // Save the raw ElevenLabs response for debugging
       setRawElevenLabsResponse(JSON.stringify(transcriptionResult, null, 2));
       
-      // Extract the total duration of the audio from the segments
-      // Get the end time of the last segment or estimate from audio file duration
-      let totalDuration = 0;
-      if (transcriptionResult.segments && transcriptionResult.segments.length > 0) {
-        // Get the end time of the last segment
-        totalDuration = transcriptionResult.segments[transcriptionResult.segments.length - 1].end;
-      } else {
-        // Fallback: try to get duration from the audio file itself
-        try {
-          const audioElement = new Audio();
-          audioElement.src = URL.createObjectURL(uploadedAudio);
-          await new Promise(resolve => {
-            audioElement.onloadedmetadata = () => {
-              totalDuration = audioElement.duration;
-              resolve(null);
-            };
-          });
-        } catch (error) {
-          console.error("Não foi possível determinar a duração do áudio:", error);
-        }
-      }
-      
-      console.log("Duração total do áudio:", totalDuration, "segundos");
+      console.log("Duração total do áudio:", audioDuration, "segundos");
       
       // Generate the default OpenAI prompt
       const systemPrompt = 
@@ -133,10 +138,10 @@ const ScriptGen = () => {
       
       Texto completo: ${transcriptionResult.text}
       
-      Duração total do áudio: ${totalDuration} segundos
+      Duração total do áudio: ${audioDuration} segundos
       
       Sua tarefa:
-      1. Use a duração total de ${totalDuration} segundos para dividir o áudio
+      1. Use a duração total de ${audioDuration} segundos para dividir o áudio
       2. Divida essa duração em segmentos de 5 segundos (crie segmentos de 0:00-0:05, 0:05-0:10, etc.)
       3. Para cada segmento de 5 segundos, crie um prompt em inglês para geração de imagem que represente o que está sendo dito naquele trecho
       4. Retorne apenas um array JSON no formato abaixo (sem explicações adicionais):
@@ -163,7 +168,7 @@ const ScriptGen = () => {
       const promptParams: PromptGenerationParams = {
         transcription: transcriptionResult.text,
         segments: transcriptionResult.segments || [],
-        totalDuration: totalDuration
+        totalDuration: audioDuration
       };
       
       const generatedPrompts = await generatePrompts(promptParams, openAIApiKey);
