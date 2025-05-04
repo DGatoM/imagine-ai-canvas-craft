@@ -25,7 +25,7 @@ export const generatePrompts = async (
     "Você vai receber a transcrição de um vídeo. Sua primeira tarefa é analisar a duração total do áudio (encontrando o timestamp final na transcrição), dividir por 5 para determinar quantos segmentos de 5 segundos são necessários, arredondando o último segmento para cima se necessário. Em seguida, crie um prompt em inglês para cada segmento de 5 segundos que ilustre o que está sendo dito naquele momento específico. Leve em consideração o contexto completo, incluindo o que foi dito antes e o que será dito depois, para que as imagens sejam coerentes entre si. As imagens sempre devem ser realistas, a não ser que o tema de uma determinada imagem possa ficar melhor com uma imagem estilizada.";
   
   try {
-    // Pass the raw transcription data to OpenAI
+    // Prepare a detailed user prompt with full transcription data including all timestamps
     const userPrompt = `
     Aqui está a transcrição completa de um áudio, incluindo timestamps: 
     
@@ -142,10 +142,3 @@ export const generatePrompts = async (
     throw error;
   }
 };
-
-// Helper function to format time in mm:ss format
-function formatTime(seconds: number): string {
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = Math.floor(seconds % 60);
-  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-}
