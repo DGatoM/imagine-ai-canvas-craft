@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { 
   LayoutGrid, 
@@ -9,7 +9,8 @@ import {
   FileAudio,
   Bug,
   Code,
-  MessageSquare
+  MessageSquare,
+  KeyRound
 } from "lucide-react";
 import { 
   Card, 
@@ -32,7 +33,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { transcribeAudio, AudioTranscription } from "@/services/elevenLabsService";
 import { generatePrompts, PromptGenerationParams } from "@/services/openaiService";
-import { generateReplicateImage, ReplicateImageParams } from "@/services/replicateService";
+import { generateReplicateImage, ReplicateImageParams, saveReplicateApiToken } from "@/services/replicateService";
 
 interface PromptSegment {
   id: string;
@@ -51,6 +52,7 @@ const ScriptGen = () => {
   const [step, setStep] = useState<'upload' | 'prompts' | 'images' | 'videos'>('upload');
   const [elevenLabsApiKey, setElevenLabsApiKey] = useState<string>("");
   const [openAIApiKey, setOpenAIApiKey] = useState<string>("");
+  const [replicateApiKey, setReplicateApiKey] = useState<string>("");
   const [transcription, setTranscription] = useState<AudioTranscription | null>(null);
   const [audioDuration, setAudioDuration] = useState<number>(0);
   
@@ -397,6 +399,24 @@ const ScriptGen = () => {
     }, 2000);
   };
 
+  const handleSaveReplicateApiKey = () => {
+    if (replicateApiKey) {
+      saveReplicateApiToken(replicateApiKey);
+    } else {
+      toast.error("Por favor, forneça uma chave de API válida");
+    }
+  };
+
+  // Load saved API keys from localStorage on component mount
+  useEffect(() => {
+    const savedReplicateKey = localStorage.getItem('REPLICATE_API_TOKEN');
+    if (savedReplicateKey) {
+      setReplicateApiKey(savedReplicateKey);
+    }
+    
+    // You might want to do the same for other API keys in the future
+  }, []);
+
   return (
     <div className="min-h-screen bg-background py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
@@ -462,7 +482,7 @@ const ScriptGen = () => {
               </div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label className="text-sm font-medium mb-2 block">API Key do Eleven Labs</label>
                 <Input 
@@ -484,7 +504,30 @@ const ScriptGen = () => {
                   onChange={(e) => setOpenAIApiKey(e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Usada para gerar prompts e imagens
+                  Usada para gerar prompts
+                </p>
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-2 flex items-center justify-between">
+                  <span>API Key da Replicate</span>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={handleSaveReplicateApiKey}
+                    className="h-6 text-xs"
+                  >
+                    <KeyRound className="h-3 w-3 mr-1" />
+                    Salvar
+                  </Button>
+                </label>
+                <Input 
+                  type="password" 
+                  placeholder="r8_..." 
+                  value={replicateApiKey}
+                  onChange={(e) => setReplicateApiKey(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Usada para gerar imagens (será salva localmente)
                 </p>
               </div>
             </div>

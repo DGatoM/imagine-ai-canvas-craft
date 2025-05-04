@@ -3,7 +3,20 @@ import { toast } from "sonner";
 import { v4 as uuidv4 } from 'uuid';
 import { GeneratedImage } from "@/types/image";
 
-const REPLICATE_API_TOKEN = "r8_Z0TWG856fDlNuiw51tzDPtgWN3gMjV42ZN2d8";
+// Using a function to get the token, which can later be modified to use environment variables
+// or another secure method without changing the rest of the code
+const getReplicateApiToken = () => {
+  // In a production environment, this should come from environment variables
+  // For now, we'll store it in localStorage for frontend-only applications
+  const savedToken = localStorage.getItem('REPLICATE_API_TOKEN');
+  if (savedToken) {
+    return savedToken;
+  }
+  
+  // Default fallback - this is not ideal but better than hardcoding in the source
+  return '';
+};
+
 const REPLICATE_MODEL = "ideogram-ai/ideogram-v2a-turbo";
 
 export interface ReplicateImageParams {
@@ -15,13 +28,19 @@ export interface ReplicateImageParams {
 
 export const generateReplicateImage = async (params: ReplicateImageParams): Promise<GeneratedImage | null> => {
   try {
+    const token = getReplicateApiToken();
+    if (!token) {
+      toast.error("Replicate API token não encontrado. Por favor, configure-o nas configurações.");
+      return null;
+    }
+
     console.log(`Gerando imagem via Replicate: "${params.prompt}"`);
     
     // Step 1: Create the prediction
     const createResponse = await fetch('https://api.replicate.com/v1/predictions', {
       method: 'POST',
       headers: {
-        'Authorization': `Token ${REPLICATE_API_TOKEN}`,
+        'Authorization': `Token ${token}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -59,7 +78,7 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
       
       const statusResponse = await fetch(createData.urls.get, {
         headers: {
-          'Authorization': `Token ${REPLICATE_API_TOKEN}`,
+          'Authorization': `Token ${token}`,
           'Content-Type': 'application/json',
         }
       });
@@ -111,4 +130,11 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
     toast.error(`Falha ao gerar imagem: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     return null;
   }
+};
+
+// Add a function to save the token
+export const saveReplicateApiToken = (token: string) => {
+  localStorage.setItem('REPLICATE_API_TOKEN', token);
+  toast.success("Token da Replicate salvo com sucesso!");
+  return true;
 };
