@@ -22,65 +22,34 @@ export const generatePrompts = async (
   }
 
   const systemPrompt = 
-    "Você vai receber a transcrição de um vídeo. seu papel é entender o contexto do vídeo e gerar um prompt em inglês para criação de imagens em outra IA que vão mudar a cada 5 segundos e precisam ilustrar o que está sendo dito no momento, leve em consideração o todo e também o que foi dito anteriormente e o que será dito depois para que as imagens fiquem coerentes. As imagens sempre devem ser realistas, a não ser que o tema de uma determinada imagem possa ficar melhor com uma imagem estilizada";
+    "Você vai receber a transcrição de um vídeo. Sua primeira tarefa é analisar a duração total do áudio (encontrando o timestamp final na transcrição), dividir por 5 para determinar quantos segmentos de 5 segundos são necessários, arredondando o último segmento para cima se necessário. Em seguida, crie um prompt em inglês para cada segmento de 5 segundos que ilustre o que está sendo dito naquele momento específico. Leve em consideração o contexto completo, incluindo o que foi dito antes e o que será dito depois, para que as imagens sejam coerentes entre si. As imagens sempre devem ser realistas, a não ser que o tema de uma determinada imagem possa ficar melhor com uma imagem estilizada.";
   
   try {
-    // First, determine the total duration of the audio from the segments
-    const segments = params.segments;
-    let totalDuration = 0;
-    
-    if (segments && segments.length > 0) {
-      // Find the max end time from all segments
-      totalDuration = Math.max(...segments.map(segment => segment.end));
-    }
-    
-    console.log("Total audio duration detected:", totalDuration, "seconds");
-    
-    // Create 5-second chunks covering the entire audio duration
-    const fiveSecondChunks: Array<{ text: string; start: number; end: number; }> = [];
-    
-    // Create chunks for every 5 seconds of the total duration
-    for (let chunkStart = 0; chunkStart < totalDuration; chunkStart += 5) {
-      const chunkEnd = Math.min(chunkStart + 5, totalDuration);
-      
-      // Find text that overlaps with this chunk
-      const relevantSegments = segments.filter(
-        segment => (segment.start < chunkEnd && segment.end > chunkStart)
-      );
-      
-      // Combine text from all relevant segments
-      const combinedText = relevantSegments
-        .map(segment => segment.text)
-        .join(" ");
-      
-      fiveSecondChunks.push({
-        text: combinedText || "Silence",
-        start: chunkStart,
-        end: chunkEnd
-      });
-    }
-    
-    console.log(`Generated ${fiveSecondChunks.length} five-second chunks`);
-    
+    // Pass the raw transcription data to OpenAI
     const userPrompt = `
-    Transcrição completa: 
-    ${params.transcription}
+    Aqui está a transcrição completa de um áudio, incluindo timestamps: 
     
-    Agora, para cada segmento de 5 segundos abaixo, gere um prompt em inglês para geração de imagem:
-    ${fiveSecondChunks.map(chunk => `
-    Segmento [${formatTime(chunk.start)} - ${formatTime(chunk.end)}]:
-    ${chunk.text}`).join('\n')}
+    Texto completo: ${params.transcription}
     
-    Responda apenas com um JSON no formato:
+    Detalhes dos segmentos com timestamps:
+    ${JSON.stringify(params.segments, null, 2)}
+    
+    Sua tarefa:
+    1. Determine a duração total do áudio analisando os timestamps finais
+    2. Divida essa duração em segmentos de 5 segundos (crie segmentos de 0:00-0:05, 0:05-0:10, etc.)
+    3. Para cada segmento de 5 segundos, crie um prompt em inglês para geração de imagem que represente o que está sendo dito naquele trecho
+    4. Retorne apenas um array JSON no formato abaixo (sem explicações adicionais):
     [
       {
         "id": "1",
         "timestamp": "0:00 - 0:05",
         "prompt": "Prompt em inglês para este segmento"
       },
-      ...
+      ...etc para cada segmento de 5 segundos até o final do áudio
     ]
     `;
+    
+    console.log("Enviando transcrição para OpenAI para processamento");
     
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
