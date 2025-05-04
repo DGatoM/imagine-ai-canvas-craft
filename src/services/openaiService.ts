@@ -91,8 +91,7 @@ export const generatePrompts = async (
             role: "user",
             content: userPrompt
           }
-        ],
-        response_format: { type: "json_object" }
+        ]
       })
     });
     
@@ -104,18 +103,30 @@ export const generatePrompts = async (
     const data = await response.json();
     const content = data.choices[0].message.content;
     
-    // Parse the JSON response
+    // Try to parse the JSON response
     try {
-      const parsedContent = JSON.parse(content);
-      if (Array.isArray(parsedContent)) {
-        return parsedContent;
-      } else if (parsedContent.prompts && Array.isArray(parsedContent.prompts)) {
-        return parsedContent.prompts;
+      // This regex finds anything that looks like a JSON array
+      const jsonMatch = content.match(/\[\s*\{[\s\S]*\}\s*\]/);
+      if (jsonMatch) {
+        const jsonContent = jsonMatch[0];
+        console.log("Extracted JSON content:", jsonContent);
+        return JSON.parse(jsonContent);
+      }
+      
+      // If no JSON array found, try to parse the whole content
+      console.log("Trying to parse full content:", content);
+      const parsed = JSON.parse(content);
+      
+      // Handle different response formats
+      if (Array.isArray(parsed)) {
+        return parsed;
+      } else if (parsed.prompts && Array.isArray(parsed.prompts)) {
+        return parsed.prompts;
       } else {
         // Try to find any array property in the response
-        for (const key in parsedContent) {
-          if (Array.isArray(parsedContent[key])) {
-            return parsedContent[key];
+        for (const key in parsed) {
+          if (Array.isArray(parsed[key])) {
+            return parsed[key];
           }
         }
         throw new Error("Formato de resposta incorreto");
@@ -123,6 +134,29 @@ export const generatePrompts = async (
     } catch (parseError) {
       console.error("Erro ao analisar resposta JSON:", parseError);
       console.log("Conteúdo recebido:", content);
+      
+      // Last resort: try to manually extract the data using regex
+      try {
+        // Match individual prompt objects
+        const promptRegex = /"id"\s*:\s*"([^"]+)"\s*,\s*"timestamp"\s*:\s*"([^"]+)"\s*,\s*"prompt"\s*:\s*"([^"]+)"/g;
+        const prompts: PromptSegment[] = [];
+        let match;
+        
+        while ((match = promptRegex.exec(content)) !== null) {
+          prompts.push({
+            id: match[1],
+            timestamp: match[2],
+            prompt: match[3].replace(/\\"/g, '"')
+          });
+        }
+        
+        if (prompts.length > 0) {
+          return prompts;
+        }
+      } catch (regexError) {
+        console.error("Falha na extração por regex:", regexError);
+      }
+      
       throw new Error("Formato de resposta incorreto");
     }
   } catch (error) {
