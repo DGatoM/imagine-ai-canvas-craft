@@ -1,13 +1,13 @@
 
 import { useState } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { 
   LayoutGrid, 
   Upload, 
   Image as ImageIcon, 
   Play, 
-  FileUp 
+  FileUp,
+  FileAudio
 } from "lucide-react";
 import { 
   Card, 
@@ -26,6 +26,9 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
+import { transcribeAudio, AudioTranscription } from "@/services/elevenLabsService";
+import { generatePrompts, PromptGenerationParams } from "@/services/openaiService";
 
 interface PromptSegment {
   id: string;
@@ -41,49 +44,74 @@ const ScriptGen = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [segments, setSegments] = useState<PromptSegment[]>([]);
   const [step, setStep] = useState<'upload' | 'prompts' | 'images' | 'videos'>('upload');
+  const [elevenLabsApiKey, setElevenLabsApiKey] = useState<string>("");
+  const [openAIApiKey, setOpenAIApiKey] = useState<string>("");
+  const [transcription, setTranscription] = useState<AudioTranscription | null>(null);
   
   const handleAudioUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
       setUploadedAudio(files[0]);
-      // Simulate processing audio
-      setIsProcessing(true);
-      setTimeout(() => {
-        setIsProcessing(false);
-        // Simulate receiving segments from API
-        const mockSegments: PromptSegment[] = [
-          { 
-            id: '1', 
-            prompt: "Um gato preto com olhos verdes sentado em uma janela observando a chuva lá fora", 
-            timestamp: "0:00 - 0:05", 
-            imageUrl: null, 
-            videoUrl: null 
-          },
-          { 
-            id: '2', 
-            prompt: "O gato preto se espreguiçando lentamente e bocejando, ainda perto da janela", 
-            timestamp: "0:05 - 0:10", 
-            imageUrl: null, 
-            videoUrl: null 
-          },
-          { 
-            id: '3', 
-            prompt: "O gato pulando da janela para o sofá próximo com movimento gracioso", 
-            timestamp: "0:10 - 0:15", 
-            imageUrl: null, 
-            videoUrl: null 
-          },
-          { 
-            id: '4', 
-            prompt: "O gato se aconchegando em uma almofada no sofá e começando a dormir", 
-            timestamp: "0:15 - 0:20", 
-            imageUrl: null, 
-            videoUrl: null 
-          },
-        ];
-        setSegments(mockSegments);
-        setStep('prompts');
-      }, 2000);
+    }
+  };
+
+  const handleProcessAudio = async () => {
+    if (!uploadedAudio) {
+      toast.error("Por favor, carregue um arquivo de áudio");
+      return;
+    }
+
+    if (!elevenLabsApiKey) {
+      toast.error("Por favor, forneça a chave de API do Eleven Labs");
+      return;
+    }
+
+    if (!openAIApiKey) {
+      toast.error("Por favor, forneça a chave de API da OpenAI");
+      return;
+    }
+
+    setIsProcessing(true);
+    
+    try {
+      // Step 1: Transcribe audio
+      const transcriptionResult = await transcribeAudio(
+        uploadedAudio,
+        elevenLabsApiKey,
+        {
+          tagAudioEvents: true,
+          diarize: true,
+          languageCode: "pt" // Portuguese language code for Brazilian content
+        }
+      );
+      
+      setTranscription(transcriptionResult);
+      
+      // Step 2: Generate prompts from the transcription
+      const promptParams: PromptGenerationParams = {
+        transcription: transcriptionResult.text,
+        segments: transcriptionResult.segments || []
+      };
+      
+      const generatedPrompts = await generatePrompts(promptParams, openAIApiKey);
+      
+      // Step 3: Format segments for the UI
+      const formattedSegments: PromptSegment[] = generatedPrompts.map(item => ({
+        id: item.id,
+        prompt: item.prompt,
+        timestamp: item.timestamp,
+        imageUrl: null,
+        videoUrl: null
+      }));
+      
+      setSegments(formattedSegments);
+      setStep('prompts');
+      toast.success("Áudio processado com sucesso!");
+    } catch (error) {
+      console.error("Erro no processamento do áudio:", error);
+      toast.error(`Falha no processamento: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -104,6 +132,7 @@ const ScriptGen = () => {
         }))
       );
       setStep('images');
+      toast.success("Imagens geradas com sucesso!");
     }, 2000);
   };
 
@@ -118,6 +147,7 @@ const ScriptGen = () => {
         }))
       );
       setStep('videos');
+      toast.success("Imagens animadas com sucesso!");
     }, 2000);
   };
 
@@ -126,7 +156,7 @@ const ScriptGen = () => {
     setTimeout(() => {
       setIsProcessing(false);
       // Download would happen here
-      alert("Vídeo exportado com sucesso! (Simulação)");
+      toast.success("Vídeo exportado com sucesso! (Simulação)");
     }, 2000);
   };
 
@@ -152,41 +182,77 @@ const ScriptGen = () => {
               Faça upload de um áudio e escolha o formato do vídeo
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-wrap gap-4">
-            <div className="flex-1 min-w-[200px]">
-              <label className="text-sm font-medium mb-2 block">Arquivo de Áudio</label>
-              <div className="flex items-center gap-2">
-                <Input 
-                  type="file" 
-                  accept="audio/*"
-                  onChange={handleAudioUpload}
-                  className="flex-1"
-                />
-                <Button disabled={!uploadedAudio || isProcessing}>
-                  <Upload className="h-4 w-4 mr-2" />
-                  Processar
-                </Button>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="text-sm font-medium mb-2 block">Arquivo de Áudio</label>
+                <div className="flex items-center gap-2">
+                  <Input 
+                    type="file" 
+                    accept="audio/*"
+                    onChange={handleAudioUpload}
+                    className="flex-1"
+                  />
+                </div>
+                {uploadedAudio && (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Arquivo: {uploadedAudio.name}
+                  </p>
+                )}
               </div>
-              {uploadedAudio && (
-                <p className="text-sm text-muted-foreground mt-2">
-                  Arquivo: {uploadedAudio.name}
-                </p>
-              )}
+              <div>
+                <label className="text-sm font-medium mb-2 block">Proporção do Vídeo</label>
+                <Select value={aspectRatio} onValueChange={setAspectRatio}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione uma proporção" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1:1">Quadrado (1:1)</SelectItem>
+                    <SelectItem value="4:3">Paisagem (4:3)</SelectItem>
+                    <SelectItem value="3:4">Retrato (3:4)</SelectItem>
+                    <SelectItem value="16:9">Widescreen (16:9)</SelectItem>
+                    <SelectItem value="9:16">Vertical (9:16)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="w-[200px]">
-              <label className="text-sm font-medium mb-2 block">Proporção do Vídeo</label>
-              <Select value={aspectRatio} onValueChange={setAspectRatio}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione uma proporção" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1:1">Quadrado (1:1)</SelectItem>
-                  <SelectItem value="4:3">Paisagem (4:3)</SelectItem>
-                  <SelectItem value="3:4">Retrato (3:4)</SelectItem>
-                  <SelectItem value="16:9">Widescreen (16:9)</SelectItem>
-                  <SelectItem value="9:16">Vertical (9:16)</SelectItem>
-                </SelectContent>
-              </Select>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="text-sm font-medium mb-2 block">API Key do Eleven Labs</label>
+                <Input 
+                  type="password" 
+                  placeholder="sk_..." 
+                  value={elevenLabsApiKey}
+                  onChange={(e) => setElevenLabsApiKey(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Usada para transcrever o áudio
+                </p>
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-2 block">API Key da OpenAI</label>
+                <Input 
+                  type="password" 
+                  placeholder="sk-..." 
+                  value={openAIApiKey}
+                  onChange={(e) => setOpenAIApiKey(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Usada para gerar prompts e imagens
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex justify-end">
+              <Button 
+                onClick={handleProcessAudio} 
+                disabled={!uploadedAudio || isProcessing || !elevenLabsApiKey || !openAIApiKey}
+                className="flex items-center"
+              >
+                <FileAudio className="h-4 w-4 mr-2" />
+                Processar Áudio
+              </Button>
             </div>
           </CardContent>
         </Card>
