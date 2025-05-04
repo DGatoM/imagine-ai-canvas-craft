@@ -61,6 +61,30 @@ const fetchWithRetry = async (url: string, options: RequestInit, maxRetries = 3)
   throw lastError;
 };
 
+// Mock function to provide fallback images when API fails
+// This is a temporary solution until a proper backend proxy is implemented
+const getMockImageForPrompt = (prompt: string): string => {
+  // Generate a consistent but "random-looking" number from the prompt string
+  let hash = 0;
+  for (let i = 0; i < prompt.length; i++) {
+    hash = ((hash << 5) - hash) + prompt.charCodeAt(i);
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  
+  // Use the hash to select a placeholder image from a set of stock images
+  // These are just examples - replace with actual placeholders if desired
+  const placeholders = [
+    'https://images.unsplash.com/photo-1519389950473-47ba0277781c?q=80&w=1024',
+    'https://images.unsplash.com/photo-1504639725590-34d0984388bd?q=80&w=1024',
+    'https://images.unsplash.com/photo-1551434678-e076c223a692?q=80&w=1024',
+    'https://images.unsplash.com/photo-1573496130407-57329f01f769?q=80&w=1024',
+    'https://images.unsplash.com/photo-1581291518857-4e27b48ff24e?q=80&w=1024',
+  ];
+  
+  const index = Math.abs(hash) % placeholders.length;
+  return placeholders[index];
+};
+
 export const generateReplicateImage = async (params: ReplicateImageParams): Promise<GeneratedImage | null> => {
   try {
     const token = getReplicateApiToken();
@@ -71,9 +95,8 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
 
     console.log(`Gerando imagem via Replicate: "${params.prompt}"`);
     
-    // Step 1: Create the prediction
     try {
-      // Use our custom fetch with retry
+      // Step 1: Create the prediction
       const createResponse = await fetchWithRetry(
         'https://api.replicate.com/v1/predictions', 
         {
@@ -168,12 +191,37 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
     } catch (fetchError) {
       console.error('Erro na comunicação com Replicate API:', fetchError);
       
-      // Provide more specific error message for network issues
+      // CORS error handling with more information
       if (fetchError instanceof TypeError && fetchError.message.includes('Failed to fetch')) {
-        toast.error("Não foi possível conectar com a API do Replicate. Verifique sua conexão com a internet ou possíveis bloqueios CORS.");
-      } else {
-        toast.error(`Problema de conexão com a API do Replicate: ${fetchError instanceof Error ? fetchError.message : 'Erro de rede'}`);
+        console.log("Detectado provável erro de CORS, fornecendo imagem de fallback temporária");
+        
+        // Create a fallback image response
+        const mockImageUrl = getMockImageForPrompt(params.prompt);
+        const filename = `fallback-${new Date().getTime()}.jpg`;
+        
+        toast.warning(
+          "Usando imagem de fallback devido a restrições de CORS. Para resolver este problema permanentemente, considere implementar um servidor proxy.",
+          { duration: 6000 }
+        );
+        
+        // Return a mock image as fallback
+        const fallbackImage: GeneratedImage = {
+          id: uuidv4(),
+          url: mockImageUrl,
+          prompt: params.prompt,
+          timestamp: new Date(),
+          filename: filename,
+          params: {
+            prompt: params.prompt,
+            size: "1024x1024",
+          },
+          isFallback: true // Mark this as a fallback image
+        };
+        
+        return fallbackImage;
       }
+      
+      toast.error(`Problema de conexão com a API do Replicate: ${fetchError instanceof Error ? fetchError.message : 'Erro de rede'}`);
       return null;
     }
   } catch (error) {
@@ -188,4 +236,21 @@ export const saveReplicateApiToken = (token: string) => {
   localStorage.setItem('REPLICATE_API_TOKEN', token);
   toast.success("Token da Replicate salvo com sucesso!");
   return true;
+};
+
+// Add a function to check if a proxy is needed
+export const checkReplicateApiConnection = async (): Promise<boolean> => {
+  try {
+    // Simple test request to check if direct connection works
+    await fetch('https://api.replicate.com/v1/health', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    return true;
+  } catch (error) {
+    console.error("API connection test failed:", error);
+    return false;
+  }
 };

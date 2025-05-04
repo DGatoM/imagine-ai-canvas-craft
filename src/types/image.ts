@@ -1,4 +1,3 @@
-
 export type ImageSize = "1024x1024" | "1024x1536" | "1536x1024";
 
 export interface ImageGenerationParams {
@@ -20,7 +19,12 @@ export interface GeneratedImage {
   prompt: string;
   timestamp: Date;
   filename: string;
-  params: ImageGenerationParams;
+  params: {
+    prompt: string;
+    size: string;
+    [key: string]: any;
+  };
+  isFallback?: boolean; // Flag to indicate if this is a fallback image
 }
 
 export interface Brush {
