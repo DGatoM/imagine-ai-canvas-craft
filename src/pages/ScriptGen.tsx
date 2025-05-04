@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { 
@@ -33,6 +32,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { transcribeAudio, AudioTranscription } from "@/services/elevenLabsService";
 import { generatePrompts, PromptGenerationParams } from "@/services/openaiService";
+import { generateReplicateImage, ReplicateImageParams } from "@/services/replicateService";
 
 interface PromptSegment {
   id: string;
@@ -40,6 +40,7 @@ interface PromptSegment {
   timestamp: string;
   imageUrl: string | null;
   videoUrl: string | null;
+  isGenerating?: boolean;
 }
 
 const ScriptGen = () => {
@@ -281,19 +282,95 @@ const ScriptGen = () => {
     );
   };
 
-  const handleGenerateImages = () => {
-    setIsProcessing(true);
-    setTimeout(() => {
-      setIsProcessing(false);
+  const handleGenerateImage = async (segmentId: string) => {
+    const segment = segments.find(s => s.id === segmentId);
+    if (!segment) return;
+
+    // Mark this segment as generating
+    setSegments(prev => 
+      prev.map(s => s.id === segmentId ? {...s, isGenerating: true} : s)
+    );
+
+    try {
+      const params: ReplicateImageParams = {
+        prompt: segment.prompt,
+        aspect_ratio: aspectRatio,
+        timestamp: segment.timestamp
+      };
+      
+      const result = await generateReplicateImage(params);
+      
+      if (result) {
+        // Update the segment with the image URL
+        setSegments(prev => 
+          prev.map(s => s.id === segmentId ? 
+            {...s, imageUrl: result.url, isGenerating: false} : s
+          )
+        );
+        toast.success(`Imagem gerada para o segmento ${segment.timestamp}`);
+      } else {
+        throw new Error("Falha ao gerar imagem");
+      }
+    } catch (error) {
+      console.error(`Erro ao gerar imagem para segmento ${segmentId}:`, error);
+      toast.error(`Falha na geração de imagem: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+      
+      // Reset generating status
       setSegments(prev => 
-        prev.map(segment => ({
-          ...segment, 
-          imageUrl: `https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=500&h=500&auto=format&fit=crop`
-        }))
+        prev.map(s => s.id === segmentId ? {...s, isGenerating: false} : s)
       );
-      setStep('images');
-      toast.success("Imagens geradas com sucesso!");
-    }, 2000);
+    }
+  };
+
+  const handleGenerateAllImages = async () => {
+    setIsProcessing(true);
+    let success = 0;
+    let failed = 0;
+    
+    try {
+      // Process segments sequentially to avoid rate limits
+      for (const segment of segments) {
+        if (!segment.imageUrl) {
+          try {
+            const params: ReplicateImageParams = {
+              prompt: segment.prompt,
+              aspect_ratio: aspectRatio,
+              timestamp: segment.timestamp
+            };
+            
+            const result = await generateReplicateImage(params);
+            
+            if (result) {
+              setSegments(prev => 
+                prev.map(s => s.id === segment.id ? 
+                  {...s, imageUrl: result.url} : s
+                )
+              );
+              success++;
+            } else {
+              failed++;
+            }
+            
+            // Small delay between requests to avoid rate limits
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          } catch (error) {
+            console.error(`Erro ao gerar imagem para segmento ${segment.id}:`, error);
+            failed++;
+          }
+        }
+      }
+      
+      if (success > 0) {
+        toast.success(`${success} imagens geradas com sucesso!`);
+        setStep('images');
+      }
+      
+      if (failed > 0) {
+        toast.error(`Falha ao gerar ${failed} imagens.`);
+      }
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleAnimateImages = () => {
@@ -303,7 +380,7 @@ const ScriptGen = () => {
       setSegments(prev => 
         prev.map(segment => ({
           ...segment, 
-          videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-cat-playing-with-a-ball-of-wool-4358-large.mp4"
+          videoUrl: segment.imageUrl || "https://assets.mixkit.co/videos/preview/mixkit-cat-playing-with-a-ball-of-wool-4358-large.mp4"
         }))
       );
       setStep('videos');
@@ -509,9 +586,9 @@ const ScriptGen = () => {
               </h2>
               <div className="flex gap-2">
                 {step === 'prompts' && (
-                  <Button onClick={handleGenerateImages}>
+                  <Button onClick={handleGenerateAllImages}>
                     <ImageIcon className="h-4 w-4 mr-2" />
-                    Gerar Imagens
+                    Gerar Todas as Imagens
                   </Button>
                 )}
                 {step === 'images' && (
@@ -558,15 +635,24 @@ const ScriptGen = () => {
                               alt={`Imagem para ${segment.timestamp}`}
                               className="w-full h-full object-cover" 
                             />
+                          ) : segment.isGenerating ? (
+                            <div className="flex flex-col items-center justify-center h-full">
+                              <div className="h-8 w-8 border-4 border-t-primary rounded-full animate-spin mb-2"></div>
+                              <p className="text-xs text-muted-foreground">Gerando...</p>
+                            </div>
                           ) : (
                             <ImageIcon className="h-10 w-10 text-muted-foreground" />
                           )}
                         </div>
-                        {segment.imageUrl && (
-                          <Button variant="outline" size="sm" className="mt-2 w-full">
-                            Regenerar Imagem
-                          </Button>
-                        )}
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="mt-2 w-full"
+                          onClick={() => handleGenerateImage(segment.id)}
+                          disabled={segment.isGenerating}
+                        >
+                          {segment.imageUrl ? "Regenerar Imagem" : "Gerar Imagem"}
+                        </Button>
                       </div>
                       
                       {segment.videoUrl && (
