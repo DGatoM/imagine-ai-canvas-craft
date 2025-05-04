@@ -26,6 +26,41 @@ export interface ReplicateImageParams {
   timestamp?: string;
 }
 
+// Function to make a fetch request with retries
+const fetchWithRetry = async (url: string, options: RequestInit, maxRetries = 3): Promise<Response> => {
+  let lastError;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      // Add a small delay between retries, increasing with each attempt
+      if (attempt > 0) {
+        await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+      }
+      
+      const response = await fetch(url, options);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP error ${response.status}: ${errorText}`);
+      }
+      return response;
+    } catch (error) {
+      console.error(`Attempt ${attempt + 1} failed:`, error);
+      lastError = error;
+      
+      // If this is a CORS error or network failure, retrying might not help
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        // If we're on the last attempt, add more detail to the error message
+        if (attempt === maxRetries - 1) {
+          console.error("Connection to Replicate API failed. This may be due to CORS restrictions or network issues.");
+        }
+      }
+    }
+  }
+  
+  // If we've exhausted all retries
+  throw lastError;
+};
+
 export const generateReplicateImage = async (params: ReplicateImageParams): Promise<GeneratedImage | null> => {
   try {
     const token = getReplicateApiToken();
@@ -38,26 +73,25 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
     
     // Step 1: Create the prediction
     try {
-      const createResponse = await fetch('https://api.replicate.com/v1/predictions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Token ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          version: REPLICATE_MODEL,
-          input: {
-            prompt: params.prompt,
-            aspect_ratio: params.aspect_ratio || "16:9",
-            num_outputs: params.num_outputs || 1
-          }
-        })
-      });
-      
-      if (!createResponse.ok) {
-        const error = await createResponse.json();
-        throw new Error(error.detail || 'Falha ao iniciar geração de imagem');
-      }
+      // Use our custom fetch with retry
+      const createResponse = await fetchWithRetry(
+        'https://api.replicate.com/v1/predictions', 
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Token ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            version: REPLICATE_MODEL,
+            input: {
+              prompt: params.prompt,
+              aspect_ratio: params.aspect_ratio || "16:9",
+              num_outputs: params.num_outputs || 1
+            }
+          })
+        }
+      );
       
       const createData = await createResponse.json();
       console.log("Prediction iniciada:", createData);
@@ -78,17 +112,16 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
         await new Promise(resolve => setTimeout(resolve, 2000));
         
         try {
-          const statusResponse = await fetch(createData.urls.get, {
-            headers: {
-              'Authorization': `Token ${token}`,
-              'Content-Type': 'application/json',
+          // Use our custom fetch with retry for polling too
+          const statusResponse = await fetchWithRetry(
+            createData.urls.get,
+            {
+              headers: {
+                'Authorization': `Token ${token}`,
+                'Content-Type': 'application/json',
+              }
             }
-          });
-          
-          if (!statusResponse.ok) {
-            console.error("Erro ao verificar status:", await statusResponse.text());
-            continue;
-          }
+          );
           
           const statusData = await statusResponse.json();
           console.log(`Verificação ${attempts}:`, statusData.status);
@@ -134,7 +167,13 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
       return generatedImage;
     } catch (fetchError) {
       console.error('Erro na comunicação com Replicate API:', fetchError);
-      toast.error(`Problema de conexão com a API do Replicate: ${fetchError instanceof Error ? fetchError.message : 'Erro de rede'}`);
+      
+      // Provide more specific error message for network issues
+      if (fetchError instanceof TypeError && fetchError.message.includes('Failed to fetch')) {
+        toast.error("Não foi possível conectar com a API do Replicate. Verifique sua conexão com a internet ou possíveis bloqueios CORS.");
+      } else {
+        toast.error(`Problema de conexão com a API do Replicate: ${fetchError instanceof Error ? fetchError.message : 'Erro de rede'}`);
+      }
       return null;
     }
   } catch (error) {
