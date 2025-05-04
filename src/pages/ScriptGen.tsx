@@ -7,7 +7,10 @@ import {
   Image as ImageIcon, 
   Play, 
   FileUp,
-  FileAudio
+  FileAudio,
+  Bug,
+  Code,
+  MessageSquare
 } from "lucide-react";
 import { 
   Card, 
@@ -26,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { transcribeAudio, AudioTranscription } from "@/services/elevenLabsService";
 import { generatePrompts, PromptGenerationParams } from "@/services/openaiService";
@@ -47,6 +51,13 @@ const ScriptGen = () => {
   const [elevenLabsApiKey, setElevenLabsApiKey] = useState<string>("");
   const [openAIApiKey, setOpenAIApiKey] = useState<string>("");
   const [transcription, setTranscription] = useState<AudioTranscription | null>(null);
+  
+  // Debug states
+  const [showDebug, setShowDebug] = useState<boolean>(false);
+  const [rawElevenLabsResponse, setRawElevenLabsResponse] = useState<string>("");
+  const [openaiPrompt, setOpenaiPrompt] = useState<string>("");
+  const [rawOpenAIResponse, setRawOpenAIResponse] = useState<string>("");
+  const [debugActiveTab, setDebugActiveTab] = useState<string>("elevenlabs");
   
   const handleAudioUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -87,6 +98,45 @@ const ScriptGen = () => {
       
       setTranscription(transcriptionResult);
       
+      // Save the raw ElevenLabs response for debugging
+      setRawElevenLabsResponse(JSON.stringify(transcriptionResult, null, 2));
+      
+      // Generate the default OpenAI prompt
+      const systemPrompt = 
+        "Você vai receber a transcrição de um vídeo. Sua primeira tarefa é analisar a duração total do áudio (encontrando o timestamp final na transcrição), dividir por 5 para determinar quantos segmentos de 5 segundos são necessários, arredondando o último segmento para cima se necessário. Em seguida, crie um prompt em inglês para cada segmento de 5 segundos que ilustre o que está sendo dito naquele momento específico. Leve em consideração o contexto completo, incluindo o que foi dito antes e o que será dito depois, para que as imagens sejam coerentes entre si. As imagens sempre devem ser realistas, a não ser que o tema de uma determinada imagem possa ficar melhor com uma imagem estilizada.";
+      
+      const userPrompt = `
+      Aqui está a transcrição completa de um áudio, incluindo timestamps: 
+      
+      Texto completo: ${transcriptionResult.text}
+      
+      Detalhes dos segmentos com timestamps:
+      ${JSON.stringify(transcriptionResult.segments, null, 2)}
+      
+      Sua tarefa:
+      1. Determine a duração total do áudio analisando os timestamps finais
+      2. Divida essa duração em segmentos de 5 segundos (crie segmentos de 0:00-0:05, 0:05-0:10, etc.)
+      3. Para cada segmento de 5 segundos, crie um prompt em inglês para geração de imagem que represente o que está sendo dito naquele trecho
+      4. Retorne apenas um array JSON no formato abaixo (sem explicações adicionais):
+      [
+        {
+          "id": "1",
+          "timestamp": "0:00 - 0:05",
+          "prompt": "Prompt em inglês para este segmento"
+        },
+        ...etc para cada segmento de 5 segundos até o final do áudio
+      ]
+      `;
+      
+      setOpenaiPrompt(userPrompt);
+      
+      // If debug mode is active, show the prompt and wait for user to edit it
+      if (showDebug) {
+        toast.info("Transcrição concluída! Edite o prompt antes de continuar.");
+        setIsProcessing(false);
+        return;
+      }
+      
       // Step 2: Generate prompts from the transcription
       const promptParams: PromptGenerationParams = {
         transcription: transcriptionResult.text,
@@ -94,6 +144,9 @@ const ScriptGen = () => {
       };
       
       const generatedPrompts = await generatePrompts(promptParams, openAIApiKey);
+      
+      // Save the raw OpenAI response for debugging
+      setRawOpenAIResponse(JSON.stringify(generatedPrompts, null, 2));
       
       // Step 3: Format segments for the UI
       const formattedSegments: PromptSegment[] = generatedPrompts.map(item => ({
@@ -110,6 +163,85 @@ const ScriptGen = () => {
     } catch (error) {
       console.error("Erro no processamento do áudio:", error);
       toast.error(`Falha no processamento: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleProcessWithCustomPrompt = async () => {
+    if (!transcription || !openAIApiKey) {
+      toast.error("Transcription ou API key não disponíveis");
+      return;
+    }
+    
+    setIsProcessing(true);
+    
+    try {
+      // Use the custom prompt directly with the OpenAI service
+      const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${openAIApiKey}`
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "system",
+              content: "Você vai receber a transcrição de um vídeo. Sua primeira tarefa é analisar a duração total do áudio (encontrando o timestamp final na transcrição), dividir por 5 para determinar quantos segmentos de 5 segundos são necessários, arredondando o último segmento para cima se necessário. Em seguida, crie um prompt em inglês para cada segmento de 5 segundos que ilustre o que está sendo dito naquele momento específico. Leve em consideração o contexto completo, incluindo o que foi dito antes e o que será dito depois, para que as imagens sejam coerentes entre si. As imagens sempre devem ser realistas, a não ser que o tema de uma determinada imagem possa ficar melhor com uma imagem estilizada."
+            },
+            {
+              role: "user",
+              content: openaiPrompt
+            }
+          ]
+        })
+      });
+      
+      if (!openaiResponse.ok) {
+        const error = await openaiResponse.json();
+        throw new Error(error.error?.message || "Falha ao gerar prompts");
+      }
+      
+      const data = await openaiResponse.json();
+      const content = data.choices[0].message.content;
+      
+      setRawOpenAIResponse(content);
+      
+      // Try to parse the JSON response
+      try {
+        // This regex finds anything that looks like a JSON array
+        const jsonMatch = content.match(/\[\s*\{[\s\S]*\}\s*\]/);
+        if (jsonMatch) {
+          const jsonContent = jsonMatch[0];
+          console.log("Extracted JSON content:", jsonContent);
+          const generatedPrompts = JSON.parse(jsonContent);
+          
+          // Step 3: Format segments for the UI
+          const formattedSegments: PromptSegment[] = generatedPrompts.map((item: any) => ({
+            id: item.id,
+            prompt: item.prompt,
+            timestamp: item.timestamp,
+            imageUrl: null,
+            videoUrl: null
+          }));
+          
+          setSegments(formattedSegments);
+          setStep('prompts');
+          toast.success("Prompts gerados com sucesso!");
+        } else {
+          throw new Error("Não foi possível extrair JSON da resposta");
+        }
+      } catch (parseError) {
+        console.error("Erro ao analisar resposta JSON:", parseError);
+        console.log("Conteúdo recebido:", content);
+        toast.error("Erro ao processar resposta da OpenAI");
+      }
+      
+    } catch (error) {
+      console.error("Erro na geração de prompts:", error);
+      toast.error(`Falha na geração: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     } finally {
       setIsProcessing(false);
     }
@@ -173,6 +305,14 @@ const ScriptGen = () => {
               Crie vídeos a partir de áudios, gerando imagens e animações
             </p>
           </div>
+          <Button 
+            variant={showDebug ? "destructive" : "outline"}
+            onClick={() => setShowDebug(!showDebug)}
+            className="flex items-center"
+          >
+            <Bug className="h-4 w-4 mr-2" />
+            {showDebug ? "Desativar Debug" : "Ativar Debug"}
+          </Button>
         </div>
 
         <Card className="mb-8">
@@ -256,6 +396,73 @@ const ScriptGen = () => {
             </div>
           </CardContent>
         </Card>
+
+        {showDebug && transcription && (
+          <Card className="mb-8 border border-yellow-500">
+            <CardHeader className="bg-yellow-500/10">
+              <CardTitle className="text-yellow-500">Debug Mode</CardTitle>
+              <CardDescription>
+                Visualize e edite as requisições e respostas entre APIs
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <Tabs value={debugActiveTab} onValueChange={setDebugActiveTab}>
+                <TabsList className="mb-4">
+                  <TabsTrigger value="elevenlabs">
+                    <FileAudio className="h-4 w-4 mr-2" />
+                    Eleven Labs
+                  </TabsTrigger>
+                  <TabsTrigger value="openai-prompt">
+                    <Code className="h-4 w-4 mr-2" />
+                    Prompt OpenAI
+                  </TabsTrigger>
+                  <TabsTrigger value="openai-response">
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    Resposta OpenAI
+                  </TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="elevenlabs" className="mt-0">
+                  <p className="text-sm font-medium mb-2">Resposta bruta do Eleven Labs:</p>
+                  <Textarea 
+                    readOnly 
+                    value={rawElevenLabsResponse} 
+                    rows={10}
+                    className="font-mono text-xs leading-normal"
+                  />
+                </TabsContent>
+                
+                <TabsContent value="openai-prompt" className="mt-0">
+                  <p className="text-sm font-medium mb-2">Edite o prompt para a OpenAI:</p>
+                  <Textarea 
+                    value={openaiPrompt} 
+                    onChange={(e) => setOpenaiPrompt(e.target.value)}
+                    rows={15}
+                    className="font-mono text-xs leading-normal mb-2"
+                  />
+                  <Button 
+                    onClick={handleProcessWithCustomPrompt} 
+                    disabled={isProcessing || !openaiPrompt}
+                    className="w-full"
+                  >
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    Enviar Prompt Personalizado
+                  </Button>
+                </TabsContent>
+                
+                <TabsContent value="openai-response" className="mt-0">
+                  <p className="text-sm font-medium mb-2">Resposta bruta da OpenAI:</p>
+                  <Textarea 
+                    readOnly 
+                    value={rawOpenAIResponse} 
+                    rows={10}
+                    className="font-mono text-xs leading-normal"
+                  />
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+        )}
 
         {isProcessing && (
           <div className="flex justify-center items-center p-12">
@@ -362,3 +569,4 @@ const ScriptGen = () => {
 };
 
 export default ScriptGen;
+
