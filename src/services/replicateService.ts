@@ -37,94 +37,106 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
     console.log(`Gerando imagem via Replicate: "${params.prompt}"`);
     
     // Step 1: Create the prediction
-    const createResponse = await fetch('https://api.replicate.com/v1/predictions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Token ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        version: REPLICATE_MODEL,
-        input: {
-          prompt: params.prompt,
-          aspect_ratio: params.aspect_ratio || "16:9",
-          num_outputs: params.num_outputs || 1
-        }
-      })
-    });
-    
-    if (!createResponse.ok) {
-      const error = await createResponse.json();
-      throw new Error(error.detail || 'Falha ao iniciar geração de imagem');
-    }
-    
-    const createData = await createResponse.json();
-    console.log("Prediction iniciada:", createData);
-    
-    if (!createData.urls || !createData.urls.get) {
-      throw new Error('URL de verificação não encontrada na resposta da API');
-    }
-    
-    // Step 2: Poll for the result
-    let imageUrl = null;
-    let attempts = 0;
-    const maxAttempts = 30;
-    
-    while (!imageUrl && attempts < maxAttempts) {
-      attempts++;
-      
-      // Wait a bit before checking again
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      const statusResponse = await fetch(createData.urls.get, {
+    try {
+      const createResponse = await fetch('https://api.replicate.com/v1/predictions', {
+        method: 'POST',
         headers: {
           'Authorization': `Token ${token}`,
           'Content-Type': 'application/json',
-        }
+        },
+        body: JSON.stringify({
+          version: REPLICATE_MODEL,
+          input: {
+            prompt: params.prompt,
+            aspect_ratio: params.aspect_ratio || "16:9",
+            num_outputs: params.num_outputs || 1
+          }
+        })
       });
       
-      if (!statusResponse.ok) {
-        console.error("Erro ao verificar status:", await statusResponse.text());
-        continue;
+      if (!createResponse.ok) {
+        const error = await createResponse.json();
+        throw new Error(error.detail || 'Falha ao iniciar geração de imagem');
       }
       
-      const statusData = await statusResponse.json();
-      console.log(`Verificação ${attempts}:`, statusData.status);
+      const createData = await createResponse.json();
+      console.log("Prediction iniciada:", createData);
       
-      if (statusData.status === 'succeeded') {
-        if (statusData.output && statusData.output.length > 0) {
-          imageUrl = statusData.output[0];
-          console.log("Imagem gerada:", imageUrl);
-        } else {
-          throw new Error('Imagem gerada, mas URL não encontrada');
+      if (!createData.urls || !createData.urls.get) {
+        throw new Error('URL de verificação não encontrada na resposta da API');
+      }
+      
+      // Step 2: Poll for the result
+      let imageUrl = null;
+      let attempts = 0;
+      const maxAttempts = 30;
+      
+      while (!imageUrl && attempts < maxAttempts) {
+        attempts++;
+        
+        // Wait a bit before checking again
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        try {
+          const statusResponse = await fetch(createData.urls.get, {
+            headers: {
+              'Authorization': `Token ${token}`,
+              'Content-Type': 'application/json',
+            }
+          });
+          
+          if (!statusResponse.ok) {
+            console.error("Erro ao verificar status:", await statusResponse.text());
+            continue;
+          }
+          
+          const statusData = await statusResponse.json();
+          console.log(`Verificação ${attempts}:`, statusData.status);
+          
+          if (statusData.status === 'succeeded') {
+            if (statusData.output && statusData.output.length > 0) {
+              imageUrl = statusData.output[0];
+              console.log("Imagem gerada:", imageUrl);
+            } else {
+              throw new Error('Imagem gerada, mas URL não encontrada');
+            }
+          } else if (statusData.status === 'failed') {
+            throw new Error(`Falha na geração: ${statusData.error || 'Erro desconhecido'}`);
+          }
+          
+          // If still processing, continue polling
+        } catch (pollingError) {
+          console.error("Erro na verificação de status:", pollingError);
+          // Continue to next attempt even if there's an error
+          continue;
         }
-      } else if (statusData.status === 'failed') {
-        throw new Error(`Falha na geração: ${statusData.error || 'Erro desconhecido'}`);
       }
       
-      // If still processing, continue polling
-    }
-    
-    if (!imageUrl) {
-      throw new Error('Timeout ao aguardar geração da imagem');
-    }
-    
-    // Create the GeneratedImage object
-    const filename = `replicate-${new Date().getTime()}.png`;
-    
-    const generatedImage: GeneratedImage = {
-      id: uuidv4(),
-      url: imageUrl,
-      prompt: params.prompt,
-      timestamp: new Date(),
-      filename: filename,
-      params: {
-        prompt: params.prompt,
-        size: "1024x1024", // Default size for compatibility
+      if (!imageUrl) {
+        throw new Error('Timeout ao aguardar geração da imagem');
       }
-    };
-    
-    return generatedImage;
+      
+      // Create the GeneratedImage object
+      const filename = `replicate-${new Date().getTime()}.png`;
+      
+      const generatedImage: GeneratedImage = {
+        id: uuidv4(),
+        url: imageUrl,
+        prompt: params.prompt,
+        timestamp: new Date(),
+        filename: filename,
+        params: {
+          prompt: params.prompt,
+          size: "1024x1024", // Default size for compatibility
+        }
+      };
+      
+      return generatedImage;
+    } catch (fetchError) {
+      console.error('Erro na comunicação com Replicate API:', fetchError);
+      toast.error(`Problema de conexão com a API do Replicate: ${fetchError instanceof Error ? fetchError.message : 'Erro de rede'}`);
+      return null;
+    }
   } catch (error) {
     console.error('Erro ao gerar imagem com Replicate:', error);
     toast.error(`Falha ao gerar imagem: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);

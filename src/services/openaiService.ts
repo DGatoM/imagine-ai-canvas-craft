@@ -31,6 +31,14 @@ export const generatePrompts = async (
     "Você vai receber a transcrição de um vídeo. Sua tarefa é analisar a duração total do áudio (fornecida na solicitação) e dividi-la em segmentos de 5 segundos. É CRUCIAL que você SEMPRE arredonde para cima no último segmento, garantindo que TODA a duração seja coberta. Por exemplo, para um áudio de 27 segundos, você deve criar 6 segmentos (5 completos + 1 parcial). Para cada segmento, crie um prompt em inglês que ilustre o que está sendo dito naquele momento específico. Cada prompt DEVE SEMPRE começar com 'A realistic high resolution photo of' e ser bastante detalhado, incluindo elementos como ambiente, iluminação, expressões faciais, e outros detalhes relevantes. Lembre-se que a IA de geração de imagem não terá nenhum contexto adicional além deste prompt. Considere o contexto completo, incluindo o que foi dito antes e o que será dito depois, para que as imagens sejam coerentes entre si.";
   
   try {
+    // Calcular o número correto de segmentos
+    const totalDuration = params.totalDuration;
+    const segmentDuration = 5; // 5 segundos por segmento
+    const numberOfSegments = Math.ceil(totalDuration / segmentDuration);
+    
+    console.log(`Duração total calculada: ${totalDuration} segundos`);
+    console.log(`Número de segmentos (arredondado para cima): ${numberOfSegments}`);
+    
     // Prepare a detailed user prompt with transcription data and explicit duration from metadata
     const userPrompt = `
     Aqui está a transcrição de um áudio:
@@ -43,9 +51,10 @@ export const generatePrompts = async (
     1. Use a duração total de ${params.totalDuration} segundos para dividir o áudio
     2. Divida essa duração em segmentos de EXATAMENTE 5 segundos cada (crie segmentos de 0:00-0:05, 0:05-0:10, etc.)
     3. IMPORTANTE: Se a duração não for divisível exatamente por 5, SEMPRE arredonde para cima e crie um segmento adicional para o tempo restante. Por exemplo, para um áudio de 27 segundos, você deve criar 6 segmentos (0:00-0:05, 0:05-0:10, 0:10-0:15, 0:15-0:20, 0:20-0:25, 0:25-0:27).
-    4. Para cada segmento, crie um prompt em inglês para geração de imagem que represente o que está sendo dito naquele trecho
-    5. IMPORTANTE: Cada prompt DEVE SEMPRE começar com "A realistic high resolution photo of" e deve ser bastante detalhado, descrevendo o ambiente, iluminação, expressões, ações e elementos importantes da cena.
-    6. Retorne apenas um array JSON no formato abaixo (sem explicações adicionais):
+    4. Calculando matematicamente, para esta duração de ${params.totalDuration} segundos, você deve criar EXATAMENTE ${numberOfSegments} segmentos.
+    5. Para cada segmento, crie um prompt em inglês para geração de imagem que represente o que está sendo dito naquele trecho
+    6. IMPORTANTE: Cada prompt DEVE SEMPRE começar com "A realistic high resolution photo of" e deve ser bastante detalhado, descrevendo o ambiente, iluminação, expressões, ações e elementos importantes da cena.
+    7. Retorne apenas um array JSON no formato abaixo (sem explicações adicionais):
     [
       {
         "id": "1",
