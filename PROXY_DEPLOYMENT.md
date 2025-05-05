@@ -73,3 +73,15 @@ After deployment, you can test if the proxy is working by:
 4. Checking that the response headers include `Access-Control-Allow-Origin: *`
 
 If there are any issues, check the logs in your hosting platform's dashboard.
+
+## Troubleshooting
+
+1. **CORS Issues**: Make sure the proxy is setting the Access-Control-Allow-Origin header.
+
+2. **API Token**: Verify the REPLICATE_API_TOKEN environment variable is correctly set on your hosting platform.
+
+3. **Response Parsing**: If you get "Unexpected end of JSON input" errors, the proxy might not be receiving a valid response from Replicate.
+
+4. **Timeout Issues**: For long-running image generations, ensure your hosting platform allows for longer request timeouts.
+
+5. **Serverless Function Limits**: Be aware of memory limits and execution time limits on serverless platforms.

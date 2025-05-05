@@ -86,6 +86,26 @@ const getMockImageForPrompt = (prompt: string): string => {
   return placeholders[index];
 };
 
+// Check if the proxy is working correctly
+const isProxyAvailable = async (): Promise<boolean> => {
+  try {
+    const response = await fetch('/api/replicateProxyStatus?predictionId=test', {
+      method: 'GET',
+    });
+    
+    if (!response.ok) {
+      console.error("Proxy test failed with status:", response.status);
+      return false;
+    }
+    
+    const data = await response.json();
+    return data.status === 'success';
+  } catch (error) {
+    console.error("Failed to connect to proxy:", error);
+    return false;
+  }
+};
+
 export const generateReplicateImage = async (params: ReplicateImageParams): Promise<GeneratedImage | null> => {
   try {
     const token = getReplicateApiToken();
@@ -95,6 +115,32 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
     }
 
     console.log(`Gerando imagem via Flux: "${params.prompt}"`);
+    
+    // First check if the proxy is available
+    const proxyAvailable = await isProxyAvailable();
+    if (!proxyAvailable) {
+      toast.error("O proxy da API Replicate não está funcionando. Verifique se o servidor proxy está em execução e configurado corretamente.");
+      console.error("API proxy is not available. Using fallback image.");
+      
+      // Provide fallback image immediately
+      const mockImageUrl = getMockImageForPrompt(params.prompt);
+      const filename = `fallback-${new Date().getTime()}.jpg`;
+      
+      const fallbackImage: GeneratedImage = {
+        id: uuidv4(),
+        url: mockImageUrl,
+        prompt: params.prompt,
+        timestamp: new Date(),
+        filename: filename,
+        params: {
+          prompt: params.prompt,
+          size: "1024x1024",
+        },
+        isFallback: true
+      };
+      
+      return fallbackImage;
+    }
     
     try {
       // Convert aspect_ratio to width and height for Flux model
@@ -111,7 +157,7 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
       }
 
       // Step 1: Use our proxy to create the prediction
-      const createResponse = await fetch('/api/replicateProxy', {
+      const createResponse = await fetchWithRetry('/api/replicateProxy', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -128,14 +174,17 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
             num_outputs: params.num_outputs || 1
           }
         })
-      });
+      }, 2); // Reduced retry count for initial request
       
-      if (!createResponse.ok) {
-        const errorData = await createResponse.json();
-        throw new Error(`API error: ${errorData.error || createResponse.statusText}`);
+      // Validate and parse the response
+      let createData;
+      try {
+        createData = await createResponse.json();
+      } catch (parseError) {
+        console.error("Failed to parse proxy response:", parseError);
+        throw new Error(`Erro ao analisar a resposta do proxy: ${parseError instanceof Error ? parseError.message : 'JSON inválido'}`);
       }
-
-      const createData = await createResponse.json();
+      
       console.log("Prediction iniciada:", createData);
       
       if (!createData.id) {
@@ -154,13 +203,19 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
         await new Promise(resolve => setTimeout(resolve, 2000));
         
         try {
-          const statusResponse = await fetch(`/api/replicateProxyStatus?predictionId=${createData.id}`);
+          const statusResponse = await fetchWithRetry(`/api/replicateProxyStatus?predictionId=${createData.id}`, {
+            method: 'GET',
+          }, 2);
           
-          if (!statusResponse.ok) {
-            throw new Error(`Error fetching status: ${statusResponse.statusText}`);
+          // Validate and parse the status response
+          let statusData;
+          try {
+            statusData = await statusResponse.json();
+          } catch (parseError) {
+            console.error("Failed to parse status response:", parseError);
+            throw new Error(`Erro ao analisar a resposta de status: ${parseError instanceof Error ? parseError.message : 'JSON inválido'}`);
           }
           
-          const statusData = await statusResponse.json();
           console.log(`Verificação ${attempts}:`, statusData.status);
           
           if (statusData.status === 'succeeded') {
@@ -255,16 +310,5 @@ export const saveReplicateApiToken = (token: string) => {
 
 // Add a function to check if the proxy is working
 export const checkReplicateApiConnection = async (): Promise<boolean> => {
-  try {
-    // Test request to check if the proxy is working
-    const response = await fetch('/api/replicateProxyStatus?predictionId=test', {
-      method: 'GET',
-    });
-    
-    // Even if we get a 400 error for invalid ID, that means the proxy is working
-    return response.status !== 500;
-  } catch (error) {
-    console.error("API proxy connection test failed:", error);
-    return false;
-  }
+  return isProxyAvailable();
 };
