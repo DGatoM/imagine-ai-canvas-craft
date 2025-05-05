@@ -1,3 +1,4 @@
+
 export type ImageSize = "1024x1024" | "1024x1536" | "1536x1024";
 
 export interface ImageGenerationParams {
@@ -6,6 +7,7 @@ export interface ImageGenerationParams {
   n?: number; // Default is 1
   quality?: "low" | "medium" | "high" | "auto"; // Correct values for gpt-image-1
   model?: string; // Added model parameter
+  negativePrompt?: string; // Add support for negative prompts
 }
 
 export interface ImageEditParams extends ImageGenerationParams {

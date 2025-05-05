@@ -34,6 +34,9 @@ export const ImageGenerationForm = ({ onImageGenerated }: ImageGenerationFormPro
   const [isGenerating, setIsGenerating] = useState(false);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [rabiscoOpen, setRabiscoOpen] = useState(false);
+  
+  // Add new field for negative prompt for Flux model
+  const [negativePrompt, setNegativePrompt] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,6 +66,8 @@ export const ImageGenerationForm = ({ onImageGenerated }: ImageGenerationFormPro
           prompt,
           size,
           quality,
+          // Add the negative prompt if available
+          ...(negativePrompt.trim() && { negativePrompt: negativePrompt })
         };
         
         result = await generateImage(params);
@@ -113,7 +118,7 @@ export const ImageGenerationForm = ({ onImageGenerated }: ImageGenerationFormPro
       <CardHeader>
         <CardTitle>Gerar Imagem com IA</CardTitle>
         <CardDescription>
-          Crie imagens com Inteligência Artificial usando instruções em linguagem natural
+          Crie imagens com Inteligência Artificial usando Flux - um modelo rápido para desenvolvimento local
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -158,6 +163,21 @@ export const ImageGenerationForm = ({ onImageGenerated }: ImageGenerationFormPro
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               className="min-h-24 font-mono"
+              disabled={isGenerating}
+            />
+          </div>
+          
+          {/* Add negative prompt field for Flux model */}
+          <div className="space-y-2">
+            <label htmlFor="negative-prompt" className="text-sm font-medium">
+              Instrução Negativa (o que não incluir na imagem)
+            </label>
+            <Textarea
+              id="negative-prompt"
+              placeholder="Elementos que você não quer na imagem..."
+              value={negativePrompt}
+              onChange={(e) => setNegativePrompt(e.target.value)}
+              className="min-h-16 font-mono"
               disabled={isGenerating}
             />
           </div>

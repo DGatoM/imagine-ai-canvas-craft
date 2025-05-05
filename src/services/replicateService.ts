@@ -17,13 +17,18 @@ const getReplicateApiToken = () => {
   return '';
 };
 
-const REPLICATE_MODEL = "ideogram-ai/ideogram-v2a-turbo";
+// Updated to use Flux model instead of Ideogram
+const REPLICATE_MODEL = "black-forest-labs/flux-schnell";
 
 export interface ReplicateImageParams {
   prompt: string;
   aspect_ratio?: string;
   num_outputs?: number;
   timestamp?: string;
+  // Adding Flux-specific parameters
+  negative_prompt?: string;
+  guidance_scale?: number;
+  seed?: number;
 }
 
 // Function to make a fetch request with retries
@@ -62,7 +67,6 @@ const fetchWithRetry = async (url: string, options: RequestInit, maxRetries = 3)
 };
 
 // Mock function to provide fallback images when API fails
-// This is a temporary solution until a proper backend proxy is implemented
 const getMockImageForPrompt = (prompt: string): string => {
   // Generate a consistent but "random-looking" number from the prompt string
   let hash = 0;
@@ -72,7 +76,6 @@ const getMockImageForPrompt = (prompt: string): string => {
   }
   
   // Use the hash to select a placeholder image from a set of stock images
-  // These are just examples - replace with actual placeholders if desired
   const placeholders = [
     'https://images.unsplash.com/photo-1519389950473-47ba0277781c?q=80&w=1024',
     'https://images.unsplash.com/photo-1504639725590-34d0984388bd?q=80&w=1024',
@@ -93,10 +96,24 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
       return null;
     }
 
-    console.log(`Gerando imagem via Replicate: "${params.prompt}"`);
+    console.log(`Gerando imagem via Flux: "${params.prompt}"`);
     
     try {
-      // Step 1: Create the prediction
+      // Convert aspect_ratio to width and height for Flux model
+      // Flux uses width and height params instead of aspect_ratio
+      let width = 1024;
+      let height = 1024;
+      
+      if (params.aspect_ratio) {
+        const [w, h] = params.aspect_ratio.split(':').map(Number);
+        if (w > h) {
+          height = Math.floor((height * h) / w);
+        } else if (h > w) {
+          width = Math.floor((width * w) / h);
+        }
+      }
+      
+      // Step 1: Create the prediction with Flux model
       const createResponse = await fetchWithRetry(
         'https://api.replicate.com/v1/predictions', 
         {
@@ -109,7 +126,11 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
             version: REPLICATE_MODEL,
             input: {
               prompt: params.prompt,
-              aspect_ratio: params.aspect_ratio || "16:9",
+              width,
+              height,
+              negative_prompt: params.negative_prompt || "",
+              guidance_scale: params.guidance_scale || 7.5,
+              seed: params.seed || Math.floor(Math.random() * 1000000),
               num_outputs: params.num_outputs || 1
             }
           })
@@ -173,7 +194,7 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
       }
       
       // Create the GeneratedImage object
-      const filename = `replicate-${new Date().getTime()}.png`;
+      const filename = `flux-${new Date().getTime()}.webp`;
       
       const generatedImage: GeneratedImage = {
         id: uuidv4(),
@@ -183,7 +204,7 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
         filename: filename,
         params: {
           prompt: params.prompt,
-          size: "1024x1024", // Default size for compatibility
+          size: `${width}x${height}`,
         }
       };
       
@@ -225,7 +246,7 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
       return null;
     }
   } catch (error) {
-    console.error('Erro ao gerar imagem com Replicate:', error);
+    console.error('Erro ao gerar imagem com Flux:', error);
     toast.error(`Falha ao gerar imagem: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     return null;
   }

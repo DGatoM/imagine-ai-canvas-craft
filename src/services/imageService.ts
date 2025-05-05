@@ -36,6 +36,11 @@ export const generateImage = async (params: ImageGenerationParams): Promise<Gene
       requestBody.quality = params.quality;
     }
     
+    // Add negative_prompt if available
+    if (params.negativePrompt) {
+      requestBody.negative_prompt = params.negativePrompt;
+    }
+    
     console.log("Gerando imagem com parâmetros:", JSON.stringify(requestBody));
     
     const response = await fetch('https://api.openai.com/v1/images/generations', {
@@ -106,6 +111,11 @@ export const editImage = async (params: ImageEditParams): Promise<GeneratedImage
     }
 
     if (params.size) formData.append('size', params.size);
+    
+    // Add negative_prompt if available
+    if (params.negativePrompt) {
+      formData.append('negative_prompt', params.negativePrompt);
+    }
     
     console.log("Enviando solicitação de edição com parâmetros:", params.prompt, params.size);
     
