@@ -32,7 +32,12 @@ const ImageEditor = ({ image, onEditComplete, onCancel }: ImageEditorProps) => {
   const [maskDataUrl, setMaskDataUrl] = useState<string>('');
   const [editPrompt, setEditPrompt] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [size, setSize] = useState<ImageSize>(image.params.size || '1024x1024');
+  
+  // Fix: Cast the size parameter to ImageSize to ensure type safety
+  const [size, setSize] = useState<ImageSize>(
+    (image.params.size as ImageSize) || "1024x1024"
+  );
+  
   const [quality, setQuality] = useState<"low" | "medium" | "high" | "auto">("auto");
 
   const handleBrushSizeChange = (value: number[]) => {
