@@ -3,9 +3,16 @@ import { toast } from "sonner";
 import { v4 as uuidv4 } from 'uuid';
 import { GeneratedImage } from "@/types/image";
 
+// Store the API token in memory and localStorage
+let API_TOKEN: string | null = null;
+
 // Using a function to get the token, which can later be modified to use environment variables
 // or another secure method without changing the rest of the code
 const getReplicateApiToken = () => {
+  if (API_TOKEN) {
+    return API_TOKEN;
+  }
+  
   // In a production environment, this should come from environment variables
   // For now, we'll store it in localStorage for frontend-only applications
   const savedToken = localStorage.getItem('REPLICATE_API_TOKEN');
@@ -17,15 +24,14 @@ const getReplicateApiToken = () => {
   return '';
 };
 
-// Updated to use Flux model instead of Ideogram
-const REPLICATE_MODEL = "black-forest-labs/flux-schnell";
+// Flux model identifier
+const FLUX_MODEL = "black-forest-labs/flux-schnell";
 
 export interface ReplicateImageParams {
   prompt: string;
   aspect_ratio?: string;
   num_outputs?: number;
   timestamp?: string;
-  // Adding Flux-specific parameters
   negative_prompt?: string;
   guidance_scale?: number;
   seed?: number;
@@ -51,14 +57,6 @@ const fetchWithRetry = async (url: string, options: RequestInit, maxRetries = 3)
     } catch (error) {
       console.error(`Attempt ${attempt + 1} failed:`, error);
       lastError = error;
-      
-      // If this is a CORS error or network failure, retrying might not help
-      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-        // If we're on the last attempt, add more detail to the error message
-        if (attempt === maxRetries - 1) {
-          console.error("Connection to Replicate API failed. This may be due to CORS restrictions or network issues.");
-        }
-      }
     }
   }
   
@@ -100,7 +98,6 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
     
     try {
       // Convert aspect_ratio to width and height for Flux model
-      // Flux uses width and height params instead of aspect_ratio
       let width = 1024;
       let height = 1024;
       
@@ -112,36 +109,37 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
           width = Math.floor((width * w) / h);
         }
       }
+
+      // Step 1: Use our proxy to create the prediction
+      const createResponse = await fetch('/api/replicateProxy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: FLUX_MODEL,
+          input: {
+            prompt: params.prompt,
+            width,
+            height,
+            negative_prompt: params.negative_prompt || "",
+            guidance_scale: params.guidance_scale || 7.5,
+            seed: params.seed || Math.floor(Math.random() * 1000000),
+            num_outputs: params.num_outputs || 1
+          }
+        })
+      });
       
-      // Step 1: Create the prediction with Flux model
-      const createResponse = await fetchWithRetry(
-        'https://api.replicate.com/v1/predictions', 
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Token ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            version: REPLICATE_MODEL,
-            input: {
-              prompt: params.prompt,
-              width,
-              height,
-              negative_prompt: params.negative_prompt || "",
-              guidance_scale: params.guidance_scale || 7.5,
-              seed: params.seed || Math.floor(Math.random() * 1000000),
-              num_outputs: params.num_outputs || 1
-            }
-          })
-        }
-      );
-      
+      if (!createResponse.ok) {
+        const errorData = await createResponse.json();
+        throw new Error(`API error: ${errorData.error || createResponse.statusText}`);
+      }
+
       const createData = await createResponse.json();
       console.log("Prediction iniciada:", createData);
       
-      if (!createData.urls || !createData.urls.get) {
-        throw new Error('URL de verificação não encontrada na resposta da API');
+      if (!createData.id) {
+        throw new Error('ID de previsão não encontrada na resposta da API');
       }
       
       // Step 2: Poll for the result
@@ -156,16 +154,11 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
         await new Promise(resolve => setTimeout(resolve, 2000));
         
         try {
-          // Use our custom fetch with retry for polling too
-          const statusResponse = await fetchWithRetry(
-            createData.urls.get,
-            {
-              headers: {
-                'Authorization': `Token ${token}`,
-                'Content-Type': 'application/json',
-              }
-            }
-          );
+          const statusResponse = await fetch(`/api/replicateProxyStatus?predictionId=${createData.id}`);
+          
+          if (!statusResponse.ok) {
+            throw new Error(`Error fetching status: ${statusResponse.statusText}`);
+          }
           
           const statusData = await statusResponse.json();
           console.log(`Verificação ${attempts}:`, statusData.status);
@@ -212,16 +205,16 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
     } catch (fetchError) {
       console.error('Erro na comunicação com Replicate API:', fetchError);
       
-      // CORS error handling with more information
-      if (fetchError instanceof TypeError && fetchError.message.includes('Failed to fetch')) {
-        console.log("Detectado provável erro de CORS, fornecendo imagem de fallback temporária");
+      // Proxy connection error handling
+      if (fetchError instanceof Error) {
+        console.log("Erro ao conectar com o proxy da API Replicate, fornecendo imagem de fallback");
         
         // Create a fallback image response
         const mockImageUrl = getMockImageForPrompt(params.prompt);
         const filename = `fallback-${new Date().getTime()}.jpg`;
         
         toast.warning(
-          "Usando imagem de fallback devido a restrições de CORS. Para resolver este problema permanentemente, considere implementar um servidor proxy.",
+          "Usando imagem de fallback devido a problemas de conexão. Verifique se o proxy está funcionando corretamente.",
           { duration: 6000 }
         );
         
@@ -242,7 +235,7 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
         return fallbackImage;
       }
       
-      toast.error(`Problema de conexão com a API do Replicate: ${fetchError instanceof Error ? fetchError.message : 'Erro de rede'}`);
+      toast.error(`Problema de conexão com o proxy da API do Replicate: ${fetchError instanceof Error ? fetchError.message : 'Erro de rede'}`);
       return null;
     }
   } catch (error) {
@@ -254,24 +247,24 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
 
 // Add a function to save the token
 export const saveReplicateApiToken = (token: string) => {
+  API_TOKEN = token;
   localStorage.setItem('REPLICATE_API_TOKEN', token);
   toast.success("Token da Replicate salvo com sucesso!");
   return true;
 };
 
-// Add a function to check if a proxy is needed
+// Add a function to check if the proxy is working
 export const checkReplicateApiConnection = async (): Promise<boolean> => {
   try {
-    // Simple test request to check if direct connection works
-    await fetch('https://api.replicate.com/v1/health', {
+    // Test request to check if the proxy is working
+    const response = await fetch('/api/replicateProxyStatus?predictionId=test', {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      }
     });
-    return true;
+    
+    // Even if we get a 400 error for invalid ID, that means the proxy is working
+    return response.status !== 500;
   } catch (error) {
-    console.error("API connection test failed:", error);
+    console.error("API proxy connection test failed:", error);
     return false;
   }
 };
