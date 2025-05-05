@@ -33,7 +33,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { transcribeAudio, AudioTranscription } from "@/services/elevenLabsService";
 import { generatePrompts, PromptGenerationParams } from "@/services/openaiService";
-import { generateReplicateImage, ReplicateImageParams, saveReplicateApiToken } from "@/services/replicateService";
+import { 
+  generateReplicateImage, 
+  ReplicateImageParams, 
+  saveReplicateApiToken 
+} from "@/services/replicate";
 
 interface PromptSegment {
   id: string;

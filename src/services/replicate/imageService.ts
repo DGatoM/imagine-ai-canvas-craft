@@ -1,112 +1,12 @@
 
-import { toast } from "sonner";
 import { v4 as uuidv4 } from 'uuid';
+import { toast } from "sonner";
 import { GeneratedImage } from "@/types/image";
+import { ReplicateImageParams, ReplicateApiResult } from "./types";
+import { getReplicateApiToken, FLUX_MODEL } from "./config";
+import { fetchWithRetry, isProxyAvailable, createFallbackImage } from "./utils";
 
-// Store the API token in memory and localStorage
-let API_TOKEN: string | null = null;
-
-// Using a function to get the token, which can later be modified to use environment variables
-// or another secure method without changing the rest of the code
-const getReplicateApiToken = () => {
-  if (API_TOKEN) {
-    return API_TOKEN;
-  }
-  
-  // In a production environment, this should come from environment variables
-  // For now, we'll store it in localStorage for frontend-only applications
-  const savedToken = localStorage.getItem('REPLICATE_API_TOKEN');
-  if (savedToken) {
-    return savedToken;
-  }
-  
-  // Default fallback - this is not ideal but better than hardcoding in the source
-  return '';
-};
-
-// Flux model identifier
-const FLUX_MODEL = "black-forest-labs/flux-schnell";
-
-export interface ReplicateImageParams {
-  prompt: string;
-  aspect_ratio?: string;
-  num_outputs?: number;
-  timestamp?: string;
-  negative_prompt?: string;
-  guidance_scale?: number;
-  seed?: number;
-}
-
-// Function to make a fetch request with retries
-const fetchWithRetry = async (url: string, options: RequestInit, maxRetries = 3): Promise<Response> => {
-  let lastError;
-  
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      // Add a small delay between retries, increasing with each attempt
-      if (attempt > 0) {
-        await new Promise(resolve => setTimeout(resolve, attempt * 1000));
-      }
-      
-      const response = await fetch(url, options);
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`HTTP error ${response.status}: ${errorText}`);
-      }
-      return response;
-    } catch (error) {
-      console.error(`Attempt ${attempt + 1} failed:`, error);
-      lastError = error;
-    }
-  }
-  
-  // If we've exhausted all retries
-  throw lastError;
-};
-
-// Mock function to provide fallback images when API fails
-const getMockImageForPrompt = (prompt: string): string => {
-  // Generate a consistent but "random-looking" number from the prompt string
-  let hash = 0;
-  for (let i = 0; i < prompt.length; i++) {
-    hash = ((hash << 5) - hash) + prompt.charCodeAt(i);
-    hash = hash & hash; // Convert to 32bit integer
-  }
-  
-  // Use the hash to select a placeholder image from a set of stock images
-  const placeholders = [
-    'https://images.unsplash.com/photo-1519389950473-47ba0277781c?q=80&w=1024',
-    'https://images.unsplash.com/photo-1504639725590-34d0984388bd?q=80&w=1024',
-    'https://images.unsplash.com/photo-1551434678-e076c223a692?q=80&w=1024',
-    'https://images.unsplash.com/photo-1573496130407-57329f01f769?q=80&w=1024',
-    'https://images.unsplash.com/photo-1581291518857-4e27b48ff24e?q=80&w=1024',
-  ];
-  
-  const index = Math.abs(hash) % placeholders.length;
-  return placeholders[index];
-};
-
-// Check if the proxy is working correctly
-const isProxyAvailable = async (): Promise<boolean> => {
-  try {
-    const response = await fetch('/api/replicateProxyStatus?predictionId=test', {
-      method: 'GET',
-    });
-    
-    if (!response.ok) {
-      console.error("Proxy test failed with status:", response.status);
-      return false;
-    }
-    
-    const data = await response.json();
-    return data.status === 'success';
-  } catch (error) {
-    console.error("Failed to connect to proxy:", error);
-    return false;
-  }
-};
-
-export const generateReplicateImage = async (params: ReplicateImageParams): Promise<GeneratedImage | null> => {
+export const generateReplicateImage = async (params: ReplicateImageParams): Promise<ReplicateApiResult> => {
   try {
     const token = getReplicateApiToken();
     if (!token) {
@@ -123,23 +23,7 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
       console.error("API proxy is not available. Using fallback image.");
       
       // Provide fallback image immediately
-      const mockImageUrl = getMockImageForPrompt(params.prompt);
-      const filename = `fallback-${new Date().getTime()}.jpg`;
-      
-      const fallbackImage: GeneratedImage = {
-        id: uuidv4(),
-        url: mockImageUrl,
-        prompt: params.prompt,
-        timestamp: new Date(),
-        filename: filename,
-        params: {
-          prompt: params.prompt,
-          size: "1024x1024",
-        },
-        isFallback: true
-      };
-      
-      return fallbackImage;
+      return createFallbackImage(params.prompt);
     }
     
     try {
@@ -265,29 +149,7 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
         console.log("Erro ao conectar com o proxy da API Replicate, fornecendo imagem de fallback");
         
         // Create a fallback image response
-        const mockImageUrl = getMockImageForPrompt(params.prompt);
-        const filename = `fallback-${new Date().getTime()}.jpg`;
-        
-        toast.warning(
-          "Usando imagem de fallback devido a problemas de conexão. Verifique se o proxy está funcionando corretamente.",
-          { duration: 6000 }
-        );
-        
-        // Return a mock image as fallback
-        const fallbackImage: GeneratedImage = {
-          id: uuidv4(),
-          url: mockImageUrl,
-          prompt: params.prompt,
-          timestamp: new Date(),
-          filename: filename,
-          params: {
-            prompt: params.prompt,
-            size: "1024x1024",
-          },
-          isFallback: true // Mark this as a fallback image
-        };
-        
-        return fallbackImage;
+        return createFallbackImage(params.prompt);
       }
       
       toast.error(`Problema de conexão com o proxy da API do Replicate: ${fetchError instanceof Error ? fetchError.message : 'Erro de rede'}`);
@@ -298,17 +160,4 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
     toast.error(`Falha ao gerar imagem: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     return null;
   }
-};
-
-// Add a function to save the token
-export const saveReplicateApiToken = (token: string) => {
-  API_TOKEN = token;
-  localStorage.setItem('REPLICATE_API_TOKEN', token);
-  toast.success("Token da Replicate salvo com sucesso!");
-  return true;
-};
-
-// Add a function to check if the proxy is working
-export const checkReplicateApiConnection = async (): Promise<boolean> => {
-  return isProxyAvailable();
 };
