@@ -289,47 +289,69 @@ const ScriptGen = () => {
     setIsProcessing(true);
     
     try {
-      // For testing, we'll only generate the first image
-      if (segments.length > 0) {
-        const firstSegment = segments[0];
+      if (segments.length === 0) {
+        toast.error("Não há segmentos para gerar imagens");
+        return;
+      }
+      
+      let successCount = 0;
+      let errorCount = 0;
+      
+      // Process each segment in sequence
+      for (let i = 0; i < segments.length; i++) {
+        const segment = segments[i];
+        
+        // Show generating status for this segment
+        setSegments(prev => 
+          prev.map(s => s.id === segment.id ? {...s, isGenerating: true} : s)
+        );
         
         try {
-          // Show generating status for the first segment
-          setSegments(prev => 
-            prev.map(s => s.id === firstSegment.id ? {...s, isGenerating: true} : s)
-          );
-          
           const params: ReplicateImageParams = {
-            prompt: firstSegment.prompt,
+            prompt: segment.prompt,
             aspect_ratio: aspectRatio,
-            timestamp: firstSegment.timestamp
+            timestamp: segment.timestamp
           };
           
           const result = await generateReplicateImage(params);
           
           if (result) {
             setSegments(prev => 
-              prev.map(s => s.id === firstSegment.id ? 
+              prev.map(s => s.id === segment.id ? 
                 {...s, imageUrl: result.url, isGenerating: false} : s
               )
             );
-            toast.success(`Imagem gerada para o segmento ${firstSegment.timestamp}`);
-            setStep('images'); // Move to images step
+            successCount++;
           } else {
             throw new Error("Falha ao gerar imagem");
           }
+          
+          // Small delay between requests to avoid overwhelming the webhook
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
         } catch (error) {
-          console.error(`Erro ao gerar imagem para o primeiro segmento:`, error);
-          toast.error(`Falha na geração de imagem: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+          console.error(`Erro ao gerar imagem para segmento ${segment.id}:`, error);
           
           // Reset generating status
           setSegments(prev => 
-            prev.map(s => s.id === firstSegment.id ? {...s, isGenerating: false} : s)
+            prev.map(s => s.id === segment.id ? {...s, isGenerating: false} : s)
           );
+          errorCount++;
         }
-      } else {
-        toast.error("Não há segmentos para gerar imagens");
       }
+      
+      if (successCount > 0) {
+        toast.success(`${successCount} imagem(ns) gerada(s) com sucesso!`);
+        setStep('images'); // Move to images step
+      }
+      
+      if (errorCount > 0) {
+        toast.error(`Falha ao gerar ${errorCount} imagem(ns).`);
+      }
+      
+    } catch (error) {
+      console.error("Erro ao gerar imagens:", error);
+      toast.error(`Falha ao gerar imagens: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     } finally {
       setIsProcessing(false);
     }
