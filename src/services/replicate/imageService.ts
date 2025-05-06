@@ -3,8 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { toast } from "sonner";
 import { GeneratedImage } from "@/types/image";
 import { ReplicateImageParams, ReplicateApiResult } from "./types";
-import { getReplicateApiToken, FLUX_MODEL } from "./config";
-import { fetchWithRetry, createFallbackImage } from "./utils";
+import { createFallbackImage } from "./utils";
 
 export const generateReplicateImage = async (params: ReplicateImageParams): Promise<ReplicateApiResult> => {
   try {
@@ -78,3 +77,5 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
     return null;
   }
 };
+
+// Remove any Replicate API token related functions since we're not using them anymore
