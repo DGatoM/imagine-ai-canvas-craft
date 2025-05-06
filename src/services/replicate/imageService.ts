@@ -15,6 +15,8 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
       
+      console.log("Enviando requisição para o webhook do Make.com...");
+      
       const makeResponse = await fetch('https://hook.us2.make.com/jaiwotw6u7hqbabu9u1cj6m3bydobapj', {
         method: 'POST',
         headers: {
@@ -28,6 +30,8 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
       
       // Clear the timeout since we got a response
       clearTimeout(timeoutId);
+      
+      console.log("Resposta recebida do webhook Make.com:", makeResponse.status);
       
       // Handle HTTP errors
       if (!makeResponse.ok) {
@@ -47,6 +51,7 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
       
       // Check if we have an image_url in the response
       if (!responseData.image_url) {
+        console.error("URL da imagem não encontrada na resposta:", responseData);
         throw new Error('URL da imagem não encontrada na resposta do webhook');
       }
       
@@ -75,12 +80,14 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
       // Check if this was an abort error (timeout)
       if (fetchError.name === 'AbortError') {
         toast.error('A requisição para o Make.com atingiu o tempo limite de 15 segundos');
+        console.error('Timeout de 15 segundos atingido para a requisição do webhook');
       } else {
         // Show error toast
         toast.error(`Erro ao gerar imagem via webhook: ${fetchError instanceof Error ? fetchError.message : 'Erro de rede'}`);
       }
       
       // Create a fallback image response
+      console.error('Usando imagem de fallback devido a problemas de conexão');
       return createFallbackImage(params.prompt);
     }
   } catch (error) {
@@ -89,5 +96,3 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
     return null;
   }
 };
-
-// Remove any Replicate API token related functions since we're not using them anymore
