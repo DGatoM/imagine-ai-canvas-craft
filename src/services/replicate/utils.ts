@@ -53,17 +53,39 @@ export const getMockImageForPrompt = (prompt: string): string => {
 // Check if the proxy is working correctly
 export const isProxyAvailable = async (): Promise<boolean> => {
   try {
+    console.log("Testing proxy connection...");
+    
     const response = await fetch('/api/replicateProxyStatus?predictionId=test', {
       method: 'GET',
     });
     
     if (!response.ok) {
       console.error("Proxy test failed with status:", response.status);
+      try {
+        // Try to parse error response
+        const errorData = await response.json();
+        console.error("Error details:", errorData);
+      } catch (parseError) {
+        // If can't parse as JSON, get as text
+        const errorText = await response.text();
+        console.error("Error response:", errorText.substring(0, 500)); // Limit long HTML responses
+      }
       return false;
     }
     
-    const data = await response.json();
-    return data.status === 'success';
+    let data;
+    try {
+      data = await response.json();
+      console.log("Proxy test response:", data);
+    } catch (error) {
+      console.error("Failed to parse proxy response:", error);
+      // Get response as text to see what was returned
+      const text = await response.text();
+      console.error("Raw response:", text.substring(0, 500)); // Limit long HTML responses
+      return false;
+    }
+    
+    return data && data.status === 'success';
   } catch (error) {
     console.error("Failed to connect to proxy:", error);
     return false;
@@ -79,6 +101,8 @@ export const createFallbackImage = (prompt: string): any => {
     "Usando imagem de fallback devido a problemas de conexão. Verifique se o proxy está funcionando corretamente.",
     { duration: 6000 }
   );
+  
+  console.error("API proxy is not available. Using fallback image.");
   
   return {
     id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2),

@@ -11,6 +11,8 @@ Regardless of your hosting platform, you'll need to set the following environmen
 REPLICATE_API_TOKEN=your_token_here
 ```
 
+⚠️ **IMPORTANT**: The `REPLICATE_API_TOKEN` must be set on the server environment, not just in the browser. Make sure to add it in your hosting provider's environment variables section.
+
 ## Vercel Deployment
 
 1. Create a `vercel.json` file in the project root:
@@ -55,33 +57,34 @@ REPLICATE_API_TOKEN=your_token_here
 
 3. Set the environment variable in the Netlify dashboard under Site settings > Environment variables.
 
-## Render Deployment
-
-1. Set up a new Web Service pointing to your repository.
-
-2. Configure the environment variable in the Render dashboard under Environment.
-
-3. Use Express.js to create server endpoints that match the API routes.
-
 ## Testing the Proxy
 
-After deployment, you can test if the proxy is working by:
+After deployment, you can test if the proxy is working correctly by:
 
-1. Opening your browser's developer tools
-2. Going to the Network tab
-3. Making a request from your application 
-4. Checking that the response headers include `Access-Control-Allow-Origin: *`
+1. Making a direct request to test the proxy connection:
+   ```
+   curl -X GET https://your-deployment-url.com/api/replicateProxyStatus?predictionId=test
+   ```
+   You should receive a response like: `{"status":"success","message":"Proxy connection test successful"}`
 
-If there are any issues, check the logs in your hosting platform's dashboard.
+2. If the connection test works but image generation still fails:
+   - Check that your Replicate API token is valid
+   - Verify that your token has permission to use the specific model
+   - Look at the server logs for more detailed error information
 
 ## Troubleshooting
 
-1. **CORS Issues**: Make sure the proxy is setting the Access-Control-Allow-Origin header.
+1. **HTML Response Instead of JSON**: If you're seeing errors like "Unexpected token '<', '<!DOCTYPE '... is not valid JSON", you're likely getting an HTML error page instead of a JSON response. This usually means:
+   - Your API routes aren't properly configured in your hosting platform
+   - The server function is crashing before it can return a proper response
+   - Check your hosting platform's function logs for more details
 
-2. **API Token**: Verify the REPLICATE_API_TOKEN environment variable is correctly set on your hosting platform.
+2. **CORS Issues**: Make sure the proxy is setting the Access-Control-Allow-Origin header.
 
-3. **Response Parsing**: If you get "Unexpected end of JSON input" errors, the proxy might not be receiving a valid response from Replicate.
+3. **API Token**: Verify the REPLICATE_API_TOKEN environment variable is correctly set on your hosting platform.
 
-4. **Timeout Issues**: For long-running image generations, ensure your hosting platform allows for longer request timeouts.
+4. **Response Parsing**: If you get "Unexpected end of JSON input" errors, the proxy might not be receiving a valid response from Replicate.
 
-5. **Serverless Function Limits**: Be aware of memory limits and execution time limits on serverless platforms.
+5. **Timeout Issues**: For long-running image generations, ensure your hosting platform allows for longer request timeouts.
+
+6. **Serverless Function Limits**: Be aware of memory limits and execution time limits on serverless platforms.

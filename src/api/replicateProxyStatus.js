@@ -41,7 +41,7 @@ export default async function handler(req, res) {
     }
     
     console.log(`Fetching prediction status for ID: ${predictionId}`);
-
+    
     const replicateRes = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
       method: "GET",
       headers: {
@@ -50,25 +50,29 @@ export default async function handler(req, res) {
       }
     });
 
-    // Check if the response is OK
-    if (!replicateRes.ok) {
-      const errorText = await replicateRes.text();
-      console.error(`Replicate API error (${replicateRes.status}):`, errorText);
-      return res.status(replicateRes.status).json({ 
-        error: 'Replicate API error',
-        statusCode: replicateRes.status,
-        message: errorText
+    // Get the response as text first for debugging
+    const responseText = await replicateRes.text();
+    console.log(`Replicate API status response (${replicateRes.status}):`, responseText);
+    
+    // Parse the JSON if possible
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('Failed to parse JSON response:', parseError);
+      return res.status(500).json({
+        error: 'Invalid JSON response from Replicate API',
+        responseStatus: replicateRes.status,
+        responseText: responseText.substring(0, 300) // Truncate long responses
       });
     }
 
-    // Parse the JSON response
-    const data = await replicateRes.json();
-    console.log('Replicate API status response:', data);
-    return res.status(200).json(data);
+    // Return the parsed response with the actual status code
+    return res.status(replicateRes.status).json(data);
   } catch (error) {
-    console.error('Error fetching prediction status from Replicate API:', error);
+    console.error('Error fetching prediction status:', error);
     return res.status(500).json({ 
-      error: 'Error fetching prediction status',
+      error: 'Error connecting to Replicate API',
       message: error.message 
     });
   }
