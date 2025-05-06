@@ -1,4 +1,3 @@
-
 import { v4 as uuidv4 } from 'uuid';
 import { GeneratedImage } from "@/types/image";
 import { ReplicateImageParams } from "./types";
@@ -21,4 +20,11 @@ export const createFallbackImage = (prompt: string): GeneratedImage => {
   
   console.log("Fallback image created:", fallbackImage);
   return fallbackImage;
+};
+
+// Add this function to fix the build error in apiStatus.ts
+export const isProxyAvailable = async (): Promise<boolean> => {
+  // Always return true since we're not using the proxy anymore
+  // But keeping the function to avoid build errors
+  return true;
 };

@@ -17,13 +17,17 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
       
       console.log("Enviando requisição para o webhook do Make.com...");
       
+      // Format the aspect ratio correctly for the Make webhook
+      const aspectRatio = params.aspect_ratio || "1:1";
+      
       const makeResponse = await fetch('https://hook.us2.make.com/jaiwotw6u7hqbabu9u1cj6m3bydobapj', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          prompt: params.prompt
+          "prompt": params.prompt,
+          "aspect-ratio": aspectRatio
         }),
         signal: controller.signal
       });
