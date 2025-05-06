@@ -288,6 +288,56 @@ const ScriptGen = () => {
     );
   };
 
+  const handleGenerateAllImages = async () => {
+    setIsProcessing(true);
+    
+    try {
+      // For testing, we'll only generate the first image
+      if (segments.length > 0) {
+        const firstSegment = segments[0];
+        
+        try {
+          // Show generating status for the first segment
+          setSegments(prev => 
+            prev.map(s => s.id === firstSegment.id ? {...s, isGenerating: true} : s)
+          );
+          
+          const params: ReplicateImageParams = {
+            prompt: firstSegment.prompt,
+            aspect_ratio: aspectRatio,
+            timestamp: firstSegment.timestamp
+          };
+          
+          const result = await generateReplicateImage(params);
+          
+          if (result) {
+            setSegments(prev => 
+              prev.map(s => s.id === firstSegment.id ? 
+                {...s, imageUrl: result.url, isGenerating: false} : s
+              )
+            );
+            toast.success(`Imagem gerada para o segmento ${firstSegment.timestamp}`);
+            setStep('images'); // Move to images step
+          } else {
+            throw new Error("Falha ao gerar imagem");
+          }
+        } catch (error) {
+          console.error(`Erro ao gerar imagem para o primeiro segmento:`, error);
+          toast.error(`Falha na geração de imagem: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+          
+          // Reset generating status
+          setSegments(prev => 
+            prev.map(s => s.id === firstSegment.id ? {...s, isGenerating: false} : s)
+          );
+        }
+      } else {
+        toast.error("Não há segmentos para gerar imagens");
+      }
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleGenerateImage = async (segmentId: string) => {
     const segment = segments.find(s => s.id === segmentId);
     if (!segment) return;
@@ -325,57 +375,6 @@ const ScriptGen = () => {
       setSegments(prev => 
         prev.map(s => s.id === segmentId ? {...s, isGenerating: false} : s)
       );
-    }
-  };
-
-  const handleGenerateAllImages = async () => {
-    setIsProcessing(true);
-    let success = 0;
-    let failed = 0;
-    
-    try {
-      // Process segments sequentially to avoid rate limits
-      for (const segment of segments) {
-        if (!segment.imageUrl) {
-          try {
-            const params: ReplicateImageParams = {
-              prompt: segment.prompt,
-              aspect_ratio: aspectRatio,
-              timestamp: segment.timestamp
-            };
-            
-            const result = await generateReplicateImage(params);
-            
-            if (result) {
-              setSegments(prev => 
-                prev.map(s => s.id === segment.id ? 
-                  {...s, imageUrl: result.url} : s
-                )
-              );
-              success++;
-            } else {
-              failed++;
-            }
-            
-            // Small delay between requests to avoid rate limits
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          } catch (error) {
-            console.error(`Erro ao gerar imagem para segmento ${segment.id}:`, error);
-            failed++;
-          }
-        }
-      }
-      
-      if (success > 0) {
-        toast.success(`${success} imagens geradas com sucesso!`);
-        setStep('images');
-      }
-      
-      if (failed > 0) {
-        toast.error(`Falha ao gerar ${failed} imagens.`);
-      }
-    } finally {
-      setIsProcessing(false);
     }
   };
 
