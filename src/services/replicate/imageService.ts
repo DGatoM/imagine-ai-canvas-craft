@@ -11,7 +11,10 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
     console.log(`Gerando imagem via Make.com webhook: "${params.prompt}"`);
     
     try {
-      // Call the Make.com webhook
+      // Call the Make.com webhook with a timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+      
       const makeResponse = await fetch('https://hook.us2.make.com/jaiwotw6u7hqbabu9u1cj6m3bydobapj', {
         method: 'POST',
         headers: {
@@ -19,8 +22,12 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
         },
         body: JSON.stringify({
           prompt: params.prompt
-        })
+        }),
+        signal: controller.signal
       });
+      
+      // Clear the timeout since we got a response
+      clearTimeout(timeoutId);
       
       // Handle HTTP errors
       if (!makeResponse.ok) {
@@ -65,8 +72,13 @@ export const generateReplicateImage = async (params: ReplicateImageParams): Prom
     } catch (fetchError) {
       console.error('Erro na comunicação com Make.com webhook:', fetchError);
       
-      // Show error toast
-      toast.error(`Erro ao gerar imagem via webhook: ${fetchError instanceof Error ? fetchError.message : 'Erro de rede'}`);
+      // Check if this was an abort error (timeout)
+      if (fetchError.name === 'AbortError') {
+        toast.error('A requisição para o Make.com atingiu o tempo limite de 15 segundos');
+      } else {
+        // Show error toast
+        toast.error(`Erro ao gerar imagem via webhook: ${fetchError instanceof Error ? fetchError.message : 'Erro de rede'}`);
+      }
       
       // Create a fallback image response
       return createFallbackImage(params.prompt);
