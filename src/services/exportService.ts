@@ -3,6 +3,8 @@ import JSZip from 'jszip';
 import { GeneratedImage } from '@/types/image';
 import { createFallbackImage } from './replicate/utils';
 import { toast } from 'sonner';
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { fetchFile } from '@ffmpeg/util';
 
 /**
  * Exports all generated images as a zip file
@@ -68,6 +70,16 @@ export async function exportImagesAsZip(images: GeneratedImage[]): Promise<void>
 }
 
 /**
+ * Helper function to convert URLs to blob URLs
+ */
+async function toBlobURL(url: string, type: string): Promise<string> {
+  const response = await fetch(url);
+  const blob = await response.blob();
+  const blobURL = URL.createObjectURL(new Blob([blob], { type }));
+  return blobURL;
+}
+
+/**
  * Creates a video from the generated images
  */
 export async function exportImagesAsVideo(
@@ -80,10 +92,6 @@ export async function exportImagesAsVideo(
       return;
     }
 
-    // Import FFmpeg dynamically to avoid issues during server-side rendering
-    const { FFmpeg } = await import('@ffmpeg/ffmpeg');
-    const { fetchFile } = await import('@ffmpeg/util');
-    
     // Create FFmpeg instance
     const ffmpeg = new FFmpeg();
     
@@ -180,12 +188,4 @@ export async function exportImagesAsVideo(
     console.error("Erro ao criar vídeo:", error);
     toast.error(`Falha ao criar vídeo: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
   }
-}
-
-// Helper function to convert URLs to blob URLs
-async function toBlobURL(url: string, type: string): Promise<string> {
-  const response = await fetch(url);
-  const blob = await response.blob();
-  const blobURL = URL.createObjectURL(new Blob([blob], { type }));
-  return blobURL;
 }
