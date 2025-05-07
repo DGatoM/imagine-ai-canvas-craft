@@ -1,84 +1,4 @@
 
-import JSZip from 'jszip';
-import { GeneratedImage } from '@/types/image';
-import { createFallbackImage } from './replicate/utils';
-import { toast } from 'sonner';
-import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile } from '@ffmpeg/util';
-
-/**
- * Exports all generated images as a zip file
- */
-export async function exportImagesAsZip(images: GeneratedImage[]): Promise<void> {
-  try {
-    if (images.length === 0) {
-      toast.error("Não há imagens para exportar");
-      return;
-    }
-
-    const zip = new JSZip();
-    const imgFolder = zip.folder("imagens");
-
-    if (!imgFolder) {
-      throw new Error("Não foi possível criar a pasta de imagens");
-    }
-
-    // Add images to zip
-    for (let i = 0; i < images.length; i++) {
-      const image = images[i];
-      const response = await fetch(image.url);
-      
-      if (!response.ok) {
-        // If image fetch fails, use a fallback
-        toast.error(`Não foi possível baixar a imagem ${i + 1}`);
-        continue;
-      }
-      
-      const blob = await response.blob();
-      
-      // Add to zip with numbered filename
-      const paddedNumber = String(i + 1).padStart(2, '0');
-      imgFolder.file(`imagem_${paddedNumber}.png`, blob);
-    }
-
-    // Generate the zip file
-    const content = await zip.generateAsync({
-      type: "blob",
-      compression: "DEFLATE",
-      compressionOptions: {
-        level: 6 // Balanced between size and speed
-      }
-    });
-
-    // Create download link
-    const url = URL.createObjectURL(content);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `imagens_${new Date().toISOString().slice(0, 10)}.zip`;
-    document.body.appendChild(link);
-    link.click();
-    
-    // Clean up
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    
-    toast.success("Imagens exportadas com sucesso!");
-  } catch (error) {
-    console.error("Erro ao exportar imagens:", error);
-    toast.error(`Falha ao exportar imagens: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
-  }
-}
-
-/**
- * Helper function to convert URLs to blob URLs
- */
-async function toBlobURL(url: string, type: string): Promise<string> {
-  const response = await fetch(url);
-  const blob = await response.blob();
-  const blobURL = URL.createObjectURL(new Blob([blob], { type }));
-  return blobURL;
-}
-
 /**
  * Creates a video from the generated images
  */
@@ -115,8 +35,8 @@ export async function exportImagesAsVideo(
       height = 1280;
     }
 
-    // Create a directory for the images
-    ffmpeg.writeFile('list.txt', '');
+    // Create a file list for the concat demuxer
+    let fileListContent = '';
     
     // Download and write each image to FFmpeg's file system
     for (let i = 0; i < images.length; i++) {
@@ -134,21 +54,21 @@ export async function exportImagesAsVideo(
         // Write the image to FFmpeg's virtual file system
         ffmpeg.writeFile(filename, new Uint8Array(imageData));
         
-        // Append to the input file list - each image lasts 5 seconds
-        await ffmpeg.writeFile('list.txt', 
-          `file '${filename}'\nduration 5\n`, 
-          { append: true }
-        );
+        // Add to the file list content
+        fileListContent += `file '${filename}'\nduration 5\n`;
         
         // Add the last image again without duration to avoid the end cut off
         if (i === images.length - 1) {
-          await ffmpeg.writeFile('list.txt', `file '${filename}'\n`, { append: true });
+          fileListContent += `file '${filename}'\n`;
         }
       } catch (error) {
         console.error(`Erro ao processar imagem ${i + 1}:`, error);
         toast.error(`Falha ao processar imagem ${i + 1}`);
       }
     }
+    
+    // Write the complete file list
+    ffmpeg.writeFile('list.txt', fileListContent);
     
     // Generate the video
     toast.info("Criando vídeo...");
