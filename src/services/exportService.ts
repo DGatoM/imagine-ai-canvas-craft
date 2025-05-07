@@ -1,15 +1,13 @@
 
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import { createFFmpeg, fetchFile } from '@ffmpeg/ffmpeg';
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { fetchFile } from '@ffmpeg/util';
 import { toast } from "sonner";
 import { GeneratedImage } from "@/types/image";
 
 // Initialize FFmpeg
-const ffmpeg = createFFmpeg({
-  log: true,
-  corePath: new URL('@ffmpeg/core/dist/ffmpeg-core.js', import.meta.url).href,
-});
+const ffmpeg = new FFmpeg();
 
 // Export images as a ZIP file
 export async function exportImagesZip(images: GeneratedImage[]) {
@@ -43,9 +41,12 @@ export async function exportImagesAsVideo(images: GeneratedImage[], aspectRatio:
     }
 
     // Load FFmpeg if not already loaded
-    if (!ffmpeg.isLoaded()) {
+    if (!ffmpeg.loaded) {
       toast.info("Carregando FFmpeg...");
-      await ffmpeg.load();
+      // We need to specify the path to the core files explicitly
+      await ffmpeg.load({
+        coreURL: "/ffmpeg-core.js"
+      });
     }
     
     // Download and write each image to FFmpeg's file system
@@ -57,7 +58,7 @@ export async function exportImagesAsVideo(images: GeneratedImage[], aspectRatio:
         
         const blob = await response.blob();
         const data = await fetchFile(blob);
-        ffmpeg.FS('writeFile', `img${i}.png`, data);
+        await ffmpeg.writeFile(`img${i}.png`, data);
       } catch (error) {
         console.error(`Erro ao processar imagem ${i + 1}:`, error);
         toast.error(`Falha ao processar imagem ${i + 1}`);
@@ -73,7 +74,7 @@ export async function exportImagesAsVideo(images: GeneratedImage[], aspectRatio:
     list += `file 'img${images.length - 1}.png'\n`;
     
     // Write the list file
-    ffmpeg.FS('writeFile', 'list.txt', list);
+    await ffmpeg.writeFile('list.txt', list);
     
     // Calculate video dimensions based on aspect ratio
     let width = 1280;
@@ -90,7 +91,7 @@ export async function exportImagesAsVideo(images: GeneratedImage[], aspectRatio:
     
     // Generate the video with simple slideshow (no transitions)
     toast.info("Criando vídeo...");
-    await ffmpeg.run(
+    await ffmpeg.exec([
       '-f', 'concat',
       '-safe', '0',
       '-i', 'list.txt',
@@ -102,10 +103,10 @@ export async function exportImagesAsVideo(images: GeneratedImage[], aspectRatio:
       '-pix_fmt', 'yuv420p',
       '-movflags', '+faststart',
       'out.mp4'
-    );
+    ]);
     
     // Read the video file
-    const data = ffmpeg.FS('readFile', 'out.mp4');
+    const data = await ffmpeg.readFile('out.mp4');
     
     // Create and download the video
     const blob = new Blob([data.buffer], { type: 'video/mp4' });
