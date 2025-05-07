@@ -10,6 +10,8 @@ import {
   Bug,
   Code,
   MessageSquare,
+  FileArchive,
+  Video,
 } from "lucide-react";
 import { 
   Card, 
@@ -36,6 +38,7 @@ import {
   generateReplicateImage, 
   ReplicateImageParams, 
 } from "@/services/replicate";
+import { exportImagesAsZip, exportImagesAsVideo } from "@/services/exportService";
 
 interface PromptSegment {
   id: string;
@@ -421,6 +424,73 @@ const ScriptGen = () => {
     }, 2000);
   };
 
+  const handleExportImages = async () => {
+    setIsProcessing(true);
+    try {
+      // Filter out segments without images
+      const segmentsWithImages = segments.filter(segment => segment.imageUrl);
+      
+      if (segmentsWithImages.length === 0) {
+        toast.error("Não há imagens para exportar");
+        return;
+      }
+      
+      await exportImagesAsZip(
+        segmentsWithImages.map(segment => ({
+          id: segment.id,
+          url: segment.imageUrl!,
+          prompt: segment.prompt,
+          timestamp: new Date(),
+          filename: `imagem-${segment.id}.png`,
+          params: {
+            prompt: segment.prompt,
+            size: "1024x1024"
+          }
+        }))
+      );
+      
+    } catch (error) {
+      console.error("Erro ao exportar imagens:", error);
+      toast.error(`Falha ao exportar: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleExportVideo2 = async () => {
+    setIsProcessing(true);
+    try {
+      // Filter out segments without images
+      const segmentsWithImages = segments.filter(segment => segment.imageUrl);
+      
+      if (segmentsWithImages.length === 0) {
+        toast.error("Não há imagens para exportar como vídeo");
+        return;
+      }
+      
+      await exportImagesAsVideo(
+        segmentsWithImages.map(segment => ({
+          id: segment.id,
+          url: segment.imageUrl!,
+          prompt: segment.prompt,
+          timestamp: new Date(),
+          filename: `imagem-${segment.id}.png`,
+          params: {
+            prompt: segment.prompt,
+            size: "1024x1024"
+          }
+        })),
+        aspectRatio
+      );
+      
+    } catch (error) {
+      console.error("Erro ao criar vídeo:", error);
+      toast.error(`Falha ao criar vídeo: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
@@ -608,23 +678,25 @@ const ScriptGen = () => {
               <h2 className="text-xl font-semibold">
                 Segmentos ({segments.length})
               </h2>
-              <div className="flex gap-2">
-                {/* Always show "Gerar Imagens" button */}
+              <div className="flex flex-wrap gap-2">
+                {/* Generate Images button */}
                 <Button onClick={handleGenerateAllImages}>
                   <ImageIcon className="h-4 w-4 mr-2" />
                   Gerar Imagens
                 </Button>
-                {(step === 'images' || step === 'videos') && (
-                  <Button onClick={handleAnimateImages}>
-                    <Play className="h-4 w-4 mr-2" />
-                    Animar
-                  </Button>
-                )}
-                {step === 'videos' && (
-                  <Button onClick={handleExportVideo}>
-                    <FileUp className="h-4 w-4 mr-2" />
-                    Exportar Vídeo
-                  </Button>
+                
+                {/* Only show export buttons after images are generated */}
+                {segments.some(seg => seg.imageUrl) && (
+                  <>
+                    <Button onClick={handleExportImages} variant="outline">
+                      <FileArchive className="h-4 w-4 mr-2" />
+                      Exportar Imagens
+                    </Button>
+                    <Button onClick={handleExportVideo2} variant="secondary">
+                      <Video className="h-4 w-4 mr-2" />
+                      Exportar Vídeo
+                    </Button>
+                  </>
                 )}
               </div>
             </div>
