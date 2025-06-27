@@ -38,7 +38,6 @@ import {
   ReplicateImageParams, 
 } from "@/services/replicate";
 import { exportImagesAsVideo, downloadBlob } from "@/services/exportService";
-import { supabase } from "@/integrations/supabase/client";
 
 interface PromptSegment {
   id: string;
@@ -134,8 +133,9 @@ const ScriptGen = () => {
       // For now, let's use the existing services until Supabase functions are properly set up
       console.log("Processando áudio...");
       
-      // Mock transcription for testing
+      // Mock transcription for testing - now includes the required 'id' property
       const mockTranscription: AudioTranscription = {
+        id: "mock-transcription-id",
         text: "Este é um teste de transcrição de áudio para verificar se a funcionalidade está funcionando corretamente.",
         segments: [
           { start: 0, end: 5, text: "Este é um teste" },
