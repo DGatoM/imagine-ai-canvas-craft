@@ -38,6 +38,7 @@ import {
   ReplicateImageParams, 
 } from "@/services/replicate";
 import { exportImagesAsVideo, downloadBlob } from "@/services/exportService";
+import { createSimpleImageSlideshow } from "@/services/fallbackExportService";
 
 interface PromptSegment {
   id: string;
@@ -427,17 +428,37 @@ const ScriptGen = () => {
     try {
       toast.info("Iniciando exportação do vídeo... Isso pode levar alguns minutos.");
       
-      const videoBlob = await exportImagesAsVideo(segmentsWithImages, aspectRatio);
+      let videoBlob: Blob;
+      let filename: string;
       
-      // Download the video
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `script-video-${timestamp}.mp4`;
+      try {
+        // Try FFmpeg first
+        videoBlob = await exportImagesAsVideo(segmentsWithImages, aspectRatio);
+        
+        // Download the video
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        filename = `script-video-${timestamp}.mp4`;
+        
+        downloadBlob(videoBlob, filename);
+        toast.success("Vídeo MP4 exportado com sucesso!");
+        
+      } catch (ffmpegError) {
+        console.error("FFmpeg falhou, tentando fallback:", ffmpegError);
+        toast.error("FFmpeg falhou, criando imagem compilada...");
+        
+        // Fallback to simple image compilation
+        videoBlob = await createSimpleImageSlideshow(segmentsWithImages, aspectRatio);
+        
+        // Download as PNG
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        filename = `script-images-${timestamp}.png`;
+        
+        downloadBlob(videoBlob, filename);
+        toast.success("Imagem compilada exportada com sucesso! (FFmpeg não disponível)");
+      }
       
-      downloadBlob(videoBlob, filename);
-      
-      toast.success("Vídeo exportado com sucesso!");
     } catch (error) {
-      console.error("Erro ao exportar vídeo:", error);
+      console.error("Erro ao exportar:", error);
       toast.error(`Falha na exportação: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     } finally {
       setIsProcessing(false);
