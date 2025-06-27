@@ -368,37 +368,22 @@ const ScriptGen = () => {
   };
 
   const handleExportVideo = async () => {
-    console.log('=== INICIANDO PROCESSO DE EXPORTAÇÃO ===');
-    
     const segmentsWithImages = segments.filter(segment => segment.imageUrl);
     
-    console.log('Total de segments:', segments.length);
-    console.log('Segments com imagens:', segmentsWithImages.length);
-    console.log('Detalhes dos segments com imagens:', segmentsWithImages.map(s => ({
-      id: s.id,
-      timestamp: s.timestamp,
-      hasImage: !!s.imageUrl,
-      imageUrl: s.imageUrl
-    })));
-    
     if (segmentsWithImages.length === 0) {
-      console.error('❌ Nenhuma imagem gerada para exportar');
       toast.error("Nenhuma imagem gerada para exportar");
       return;
     }
 
-    console.log('Aspect ratio selecionado:', aspectRatio);
     setIsProcessing(true);
     
     try {
-      console.log('Mostrando toast informativo...');
       toast.info("Iniciando exportação do vídeo... Isso pode levar alguns minutos.");
       
       let videoBlob: Blob;
       let filename: string;
       
       try {
-        console.log('Tentando exportação com FFmpeg...');
         // Try FFmpeg first
         videoBlob = await exportImagesAsVideo(segmentsWithImages, aspectRatio);
         
@@ -406,16 +391,11 @@ const ScriptGen = () => {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         filename = `script-video-${timestamp}.mp4`;
         
-        console.log('✅ FFmpeg bem-sucedido! Fazendo download...');
-        console.log('Nome do arquivo:', filename);
-        
         downloadBlob(videoBlob, filename);
         toast.success("Vídeo MP4 exportado com sucesso!");
         
       } catch (ffmpegError) {
-        console.error('❌ FFmpeg falhou, tentando fallback...');
-        console.error('Erro do FFmpeg:', ffmpegError);
-        
+        console.error("FFmpeg falhou, tentando fallback:", ffmpegError);
         toast.error("FFmpeg falhou, criando imagem compilada...");
         
         // Fallback to simple image compilation
@@ -425,25 +405,15 @@ const ScriptGen = () => {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         filename = `script-images-${timestamp}.png`;
         
-        console.log('✅ Fallback bem-sucedido! Fazendo download...');
-        console.log('Nome do arquivo:', filename);
-        
         downloadBlob(videoBlob, filename);
         toast.success("Imagem compilada exportada com sucesso! (FFmpeg não disponível)");
       }
       
     } catch (error) {
-      console.error('❌ ERRO CRÍTICO na exportação:', error);
-      console.error('Tipo do erro:', typeof error);
-      console.error('Nome do erro:', error instanceof Error ? error.name : 'Unknown');
-      console.error('Mensagem do erro:', error instanceof Error ? error.message : String(error));
-      console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace');
-      
+      console.error("Erro ao exportar:", error);
       toast.error(`Falha na exportação: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     } finally {
-      console.log('Finalizando processo de exportação...');
       setIsProcessing(false);
-      console.log('=== FIM DO PROCESSO DE EXPORTAÇÃO ===');
     }
   };
 
