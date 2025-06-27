@@ -38,6 +38,7 @@ import {
   ReplicateImageParams, 
 } from "@/services/replicate";
 import { exportImagesAsVideo, downloadBlob } from "@/services/exportService";
+import { supabase } from "@/integrations/supabase/client";
 
 interface PromptSegment {
   id: string;
