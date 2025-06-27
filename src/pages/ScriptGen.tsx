@@ -38,7 +38,6 @@ import {
   ReplicateImageParams, 
 } from "@/services/replicate";
 import { exportImagesAsVideo, downloadBlob } from "@/services/exportService";
-import { supabase } from "@/integrations/supabase/client";
 
 interface PromptSegment {
   id: string;
@@ -55,11 +54,10 @@ const ScriptGen = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [segments, setSegments] = useState<PromptSegment[]>([]);
   const [step, setStep] = useState<'upload' | 'prompts' | 'images' | 'videos'>('upload');
+  const [elevenLabsApiKey, setElevenLabsApiKey] = useState<string>("");
+  const [openAIApiKey, setOpenAIApiKey] = useState<string>("");
   const [transcription, setTranscription] = useState<AudioTranscription | null>(null);
   const [audioDuration, setAudioDuration] = useState<number>(0);
-  
-  // API keys will be fetched from Supabase
-  const [apiKeysLoaded, setApiKeysLoaded] = useState(false);
   
   // Debug states
   const [showDebug, setShowDebug] = useState<boolean>(false);
@@ -67,23 +65,6 @@ const ScriptGen = () => {
   const [openaiPrompt, setOpenaiPrompt] = useState<string>("");
   const [rawOpenAIResponse, setRawOpenAIResponse] = useState<string>("");
   const [debugActiveTab, setDebugActiveTab] = useState<string>("elevenlabs");
-
-  // Load API keys from Supabase on component mount
-  useEffect(() => {
-    const loadApiKeys = async () => {
-      try {
-        // API keys are now stored as Supabase secrets and will be available
-        // through edge functions
-        setApiKeysLoaded(true);
-        toast.success("Configuração carregada com sucesso!");
-      } catch (error) {
-        console.error("Erro ao carregar configuração:", error);
-        toast.error("Erro ao carregar configuração");
-      }
-    };
-
-    loadApiKeys();
-  }, []);
   
   const handleAudioUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -111,15 +92,20 @@ const ScriptGen = () => {
       });
     }
   };
-  
+
   const handleProcessAudio = async () => {
     if (!uploadedAudio) {
       toast.error("Por favor, carregue um arquivo de áudio");
       return;
     }
 
-    if (!apiKeysLoaded) {
-      toast.error("Configuração ainda não foi carregada");
+    if (!elevenLabsApiKey) {
+      toast.error("Por favor, forneça a chave de API do Eleven Labs");
+      return;
+    }
+
+    if (!openAIApiKey) {
+      toast.error("Por favor, forneça a chave de API da OpenAI");
       return;
     }
 
@@ -131,23 +117,21 @@ const ScriptGen = () => {
     setIsProcessing(true);
     
     try {
-      // For now, let's use the existing services until Supabase functions are properly set up
-      console.log("Processando áudio...");
+      // Step 1: Transcribe audio
+      const transcriptionResult = await transcribeAudio(
+        uploadedAudio,
+        elevenLabsApiKey,
+        {
+          tagAudioEvents: true,
+          diarize: true,
+          languageCode: "pt" // Portuguese language code for Brazilian content
+        }
+      );
       
-      // Mock transcription for testing - now includes the required 'id' property
-      const mockTranscription: AudioTranscription = {
-        id: "mock-transcription-id",
-        text: "Este é um teste de transcrição de áudio para verificar se a funcionalidade está funcionando corretamente.",
-        segments: [
-          { start: 0, end: 5, text: "Este é um teste" },
-          { start: 5, end: 10, text: "de transcrição de áudio" },
-          { start: 10, end: 15, text: "para verificar se a funcionalidade" },
-          { start: 15, end: 20, text: "está funcionando corretamente" }
-        ]
-      };
+      setTranscription(transcriptionResult);
       
-      setTranscription(mockTranscription);
-      setRawElevenLabsResponse(JSON.stringify(mockTranscription, null, 2));
+      // Save the raw ElevenLabs response for debugging
+      setRawElevenLabsResponse(JSON.stringify(transcriptionResult, null, 2));
       
       console.log("Duração total do áudio:", audioDuration, "segundos");
       
@@ -158,7 +142,7 @@ const ScriptGen = () => {
       const userPrompt = `
       Aqui está a transcrição de um áudio:
       
-      Texto completo: ${mockTranscription.text}
+      Texto completo: ${transcriptionResult.text}
       
       Duração total do áudio: ${audioDuration} segundos
       
@@ -186,29 +170,20 @@ const ScriptGen = () => {
         return;
       }
       
-      // Mock prompts generation for testing
-      const numberOfSegments = Math.ceil(audioDuration / 5);
-      const mockPrompts = [];
+      // Step 2: Generate prompts from the transcription
+      const promptParams: PromptGenerationParams = {
+        transcription: transcriptionResult.text,
+        segments: transcriptionResult.segments || [],
+        totalDuration: audioDuration
+      };
       
-      for (let i = 0; i < numberOfSegments; i++) {
-        const startTime = i * 5;
-        const endTime = Math.min((i + 1) * 5, audioDuration);
-        const minutes = Math.floor(startTime / 60);
-        const seconds = startTime % 60;
-        const endMinutes = Math.floor(endTime / 60);
-        const endSeconds = endTime % 60;
-        
-        mockPrompts.push({
-          id: (i + 1).toString(),
-          timestamp: `${minutes}:${seconds.toString().padStart(2, '0')} - ${endMinutes}:${endSeconds.toString().padStart(2, '0')}`,
-          prompt: `A realistic scene showing someone speaking or presenting, segment ${i + 1}`
-        });
-      }
+      const generatedPrompts = await generatePrompts(promptParams, openAIApiKey);
       
-      setRawOpenAIResponse(JSON.stringify(mockPrompts, null, 2));
+      // Save the raw OpenAI response for debugging
+      setRawOpenAIResponse(JSON.stringify(generatedPrompts, null, 2));
       
-      // Format segments for the UI
-      const formattedSegments: PromptSegment[] = mockPrompts.map((item: any) => ({
+      // Step 3: Format segments for the UI
+      const formattedSegments: PromptSegment[] = generatedPrompts.map(item => ({
         id: item.id,
         prompt: item.prompt,
         timestamp: item.timestamp,
@@ -228,43 +203,75 @@ const ScriptGen = () => {
   };
 
   const handleProcessWithCustomPrompt = async () => {
-    if (!transcription) {
-      toast.error("Transcription não disponível");
+    if (!transcription || !openAIApiKey) {
+      toast.error("Transcription ou API key não disponíveis");
       return;
     }
     
     setIsProcessing(true);
     
     try {
-      // Use the generate-prompts edge function with the custom prompt
-      const { data: promptsData, error: promptsError } = await supabase.functions.invoke('generate-prompts', {
-        body: {
-          transcription: transcription.text,
-          segments: transcription.segments || [],
-          totalDuration: audioDuration,
-          customPrompt: openaiPrompt
-        }
+      // Use the custom prompt directly with the OpenAI service
+      const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${openAIApiKey}`
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "system",
+              content: "Você vai receber a transcrição de um vídeo. Sua primeira tarefa é analisar a duração total do áudio (fornecida na solicitação), dividir por 5 para determinar quantos segmentos de 5 segundos são necessários, arredondando o último segmento para cima se necessário. Em seguida, crie um prompt em inglês para cada segmento de 5 segundos que ilustre o que está sendo dito naquele momento específico. Leve em consideração o contexto completo, incluindo o que foi dito antes e o que será dito depois, para que as imagens sejam coerentes entre si. As imagens sempre devem ser realistas, a não ser que o tema de uma determinada imagem possa ficar melhor com uma imagem estilizada."
+            },
+            {
+              role: "user",
+              content: openaiPrompt
+            }
+          ]
+        })
       });
-
-      if (promptsError) {
-        throw new Error(promptsError.message);
+      
+      if (!openaiResponse.ok) {
+        const error = await openaiResponse.json();
+        throw new Error(error.error?.message || "Falha ao gerar prompts");
       }
-
-      const generatedPrompts = promptsData;
-      setRawOpenAIResponse(JSON.stringify(generatedPrompts, null, 2));
       
-      // Step 3: Format segments for the UI
-      const formattedSegments: PromptSegment[] = generatedPrompts.map((item: any) => ({
-        id: item.id,
-        prompt: item.prompt,
-        timestamp: item.timestamp,
-        imageUrl: null,
-        videoUrl: null
-      }));
+      const data = await openaiResponse.json();
+      const content = data.choices[0].message.content;
       
-      setSegments(formattedSegments);
-      setStep('prompts');
-      toast.success("Prompts gerados com sucesso!");
+      setRawOpenAIResponse(content);
+      
+      // Try to parse the JSON response
+      try {
+        // This regex finds anything that looks like a JSON array
+        const jsonMatch = content.match(/\[\s*\{[\s\S]*\}\s*\]/);
+        if (jsonMatch) {
+          const jsonContent = jsonMatch[0];
+          console.log("Extracted JSON content:", jsonContent);
+          const generatedPrompts = JSON.parse(jsonContent);
+          
+          // Step 3: Format segments for the UI
+          const formattedSegments: PromptSegment[] = generatedPrompts.map((item: any) => ({
+            id: item.id,
+            prompt: item.prompt,
+            timestamp: item.timestamp,
+            imageUrl: null,
+            videoUrl: null
+          }));
+          
+          setSegments(formattedSegments);
+          setStep('prompts');
+          toast.success("Prompts gerados com sucesso!");
+        } else {
+          throw new Error("Não foi possível extrair JSON da resposta");
+        }
+      } catch (parseError) {
+        console.error("Erro ao analisar resposta JSON:", parseError);
+        console.log("Conteúdo recebido:", content);
+        toast.error("Erro ao processar resposta da OpenAI");
+      }
       
     } catch (error) {
       console.error("Erro na geração de prompts:", error);
@@ -478,32 +485,7 @@ const ScriptGen = () => {
                   <Input 
                     type="file" 
                     accept="audio/*"
-                    onChange={(e) => {
-                      const files = e.target.files;
-                      if (files && files.length > 0) {
-                        setUploadedAudio(files[0]);
-                        
-                        // Extract audio duration from the uploaded file
-                        const audioElement = new Audio();
-                        const objectUrl = URL.createObjectURL(files[0]);
-                        
-                        audioElement.src = objectUrl;
-                        audioElement.addEventListener('loadedmetadata', () => {
-                          const duration = audioElement.duration;
-                          setAudioDuration(duration);
-                          console.log("Audio duration extracted from file:", duration, "seconds");
-                          
-                          // Clean up object URL after getting metadata
-                          URL.revokeObjectURL(objectUrl);
-                        });
-                        
-                        audioElement.addEventListener('error', (err) => {
-                          console.error("Error loading audio metadata:", err);
-                          toast.error("Não foi possível determinar a duração do arquivo de áudio.");
-                          URL.revokeObjectURL(objectUrl);
-                        });
-                      }
-                    }}
+                    onChange={handleAudioUpload}
                     className="flex-1"
                   />
                 </div>
@@ -530,18 +512,37 @@ const ScriptGen = () => {
               </div>
             </div>
             
-            {apiKeysLoaded && (
-              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                <p className="text-green-800 text-sm">
-                  ✅ Configuração carregada com sucesso
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="text-sm font-medium mb-2 block">API Key do Eleven Labs</label>
+                <Input 
+                  type="password" 
+                  placeholder="sk_..." 
+                  value={elevenLabsApiKey}
+                  onChange={(e) => setElevenLabsApiKey(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Usada para transcrever o áudio
                 </p>
               </div>
-            )}
+              <div>
+                <label className="text-sm font-medium mb-2 block">API Key da OpenAI</label>
+                <Input 
+                  type="password" 
+                  placeholder="sk-..." 
+                  value={openAIApiKey}
+                  onChange={(e) => setOpenAIApiKey(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Usada para gerar prompts
+                </p>
+              </div>
+            </div>
             
             <div className="flex justify-end">
               <Button 
                 onClick={handleProcessAudio} 
-                disabled={!uploadedAudio || isProcessing || !apiKeysLoaded}
+                disabled={!uploadedAudio || isProcessing || !elevenLabsApiKey || !openAIApiKey}
                 className="flex items-center"
               >
                 <FileAudio className="h-4 w-4 mr-2" />
