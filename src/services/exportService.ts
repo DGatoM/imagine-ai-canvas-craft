@@ -8,23 +8,37 @@ export const exportImagesAsVideo = async (
   
   const ffmpeg = new FFmpeg();
   
-  // Load FFmpeg
-  await ffmpeg.load();
+  // Load FFmpeg with logging
+  await ffmpeg.load({
+    coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js'
+  });
   
   try {
+    // Filter segments that have images and sort by timestamp
+    const segmentsWithImages = segments
+      .filter(segment => segment.imageUrl)
+      .sort((a, b) => {
+        // Extract numeric part from timestamp for sorting
+        const aTime = parseFloat(a.timestamp.split(' - ')[0].replace(':', '.'));
+        const bTime = parseFloat(b.timestamp.split(' - ')[0].replace(':', '.'));
+        return aTime - bTime;
+      });
+
+    if (segmentsWithImages.length === 0) {
+      throw new Error('Nenhuma imagem encontrada para exportar');
+    }
+
     // Download and write each image
-    for (let i = 0; i < segments.length; i++) {
-      const segment = segments[i];
-      if (segment.imageUrl) {
-        const imageData = await fetchFile(segment.imageUrl);
-        await ffmpeg.writeFile(`image${i}.jpg`, imageData);
-      }
+    for (let i = 0; i < segmentsWithImages.length; i++) {
+      const segment = segmentsWithImages[i];
+      const imageData = await fetchFile(segment.imageUrl);
+      await ffmpeg.writeFile(`image${i}.jpg`, imageData);
     }
     
-    // Create input list for concat
-    const inputList = segments
+    // Create input list for concat demuxer
+    const inputList = segmentsWithImages
       .map((_, i) => `file 'image${i}.jpg'\nduration 5`)
-      .join('\n') + '\n' + `file 'image${segments.length - 1}.jpg'`; // Last frame
+      .join('\n') + '\n' + `file 'image${segmentsWithImages.length - 1}.jpg'`;
     
     await ffmpeg.writeFile('input.txt', inputList);
     
@@ -58,7 +72,7 @@ export const exportImagesAsVideo = async (
       '-vf', videoFilter,
       '-c:v', 'libx264',
       '-pix_fmt', 'yuv420p',
-      '-r', '30',
+      '-r', '1/5', // 1 frame every 5 seconds
       'output.mp4'
     ]);
     
@@ -68,12 +82,12 @@ export const exportImagesAsVideo = async (
     // Convert FileData to Uint8Array if needed
     let uint8Array: Uint8Array;
     if (typeof data === 'string') {
-      // Convert string to Uint8Array
+      // Convert string to Uint8Array (shouldn't happen for video files)
       const encoder = new TextEncoder();
       uint8Array = encoder.encode(data);
     } else {
       // data is already Uint8Array
-      uint8Array = data;
+      uint8Array = data as Uint8Array;
     }
     
     // Create blob from the Uint8Array
@@ -85,4 +99,15 @@ export const exportImagesAsVideo = async (
     console.error('Error creating video:', error);
     throw new Error(`Failed to create video: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
+};
+
+export const downloadBlob = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 };

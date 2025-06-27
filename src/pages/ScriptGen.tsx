@@ -10,6 +10,7 @@ import {
   Bug,
   Code,
   MessageSquare,
+  Download,
 } from "lucide-react";
 import { 
   Card, 
@@ -36,6 +37,7 @@ import {
   generateReplicateImage, 
   ReplicateImageParams, 
 } from "@/services/replicate";
+import { exportImagesAsVideo, downloadBlob } from "@/services/exportService";
 
 interface PromptSegment {
   id: string;
@@ -412,14 +414,38 @@ const ScriptGen = () => {
     }, 2000);
   };
 
-  const handleExportVideo = () => {
+  const handleExportVideo = async () => {
+    const segmentsWithImages = segments.filter(segment => segment.imageUrl);
+    
+    if (segmentsWithImages.length === 0) {
+      toast.error("Nenhuma imagem gerada para exportar");
+      return;
+    }
+
     setIsProcessing(true);
-    setTimeout(() => {
+    
+    try {
+      toast.info("Iniciando exportação do vídeo... Isso pode levar alguns minutos.");
+      
+      const videoBlob = await exportImagesAsVideo(segmentsWithImages, aspectRatio);
+      
+      // Download the video
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `script-video-${timestamp}.mp4`;
+      
+      downloadBlob(videoBlob, filename);
+      
+      toast.success("Vídeo exportado com sucesso!");
+    } catch (error) {
+      console.error("Erro ao exportar vídeo:", error);
+      toast.error(`Falha na exportação: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    } finally {
       setIsProcessing(false);
-      // Download would happen here
-      toast.success("Vídeo exportado com sucesso! (Simulação)");
-    }, 2000);
+    }
   };
+
+  // Check if we have images to export
+  const hasGeneratedImages = segments.some(segment => segment.imageUrl);
 
   return (
     <div className="min-h-screen bg-background py-8 px-4 sm:px-6 lg:px-8">
@@ -614,6 +640,12 @@ const ScriptGen = () => {
                   <ImageIcon className="h-4 w-4 mr-2" />
                   Gerar Imagens
                 </Button>
+                {hasGeneratedImages && (
+                  <Button onClick={handleExportVideo} disabled={isProcessing}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Exportar MP4
+                  </Button>
+                )}
                 {(step === 'images' || step === 'videos') && (
                   <Button onClick={handleAnimateImages}>
                     <Play className="h-4 w-4 mr-2" />
