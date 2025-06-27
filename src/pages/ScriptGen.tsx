@@ -43,6 +43,7 @@ interface PromptSegment {
   id: string;
   prompt: string;
   timestamp: string;
+  transcriptionSegment: string; // Novo campo para o trecho da transcrição
   imageUrl: string | null;
   videoUrl: string | null;
   isGenerating?: boolean;
@@ -56,6 +57,28 @@ interface AudioTranscription {
   metadata?: Record<string, any>;
   language?: string;
 }
+
+// Função para dividir a transcrição em segmentos baseado no número de imagens
+const divideTranscriptionIntoSegments = (transcription: string, numberOfSegments: number): string[] => {
+  if (!transcription || numberOfSegments <= 0) {
+    return [];
+  }
+
+  // Dividir por palavras para uma distribuição mais equilibrada
+  const words = transcription.trim().split(/\s+/);
+  const wordsPerSegment = Math.ceil(words.length / numberOfSegments);
+  
+  const segments: string[] = [];
+  
+  for (let i = 0; i < numberOfSegments; i++) {
+    const startIndex = i * wordsPerSegment;
+    const endIndex = Math.min(startIndex + wordsPerSegment, words.length);
+    const segmentWords = words.slice(startIndex, endIndex);
+    segments.push(segmentWords.join(' '));
+  }
+  
+  return segments;
+};
 
 const ScriptGen = () => {
   const [uploadedAudio, setUploadedAudio] = useState<File | null>(null);
@@ -175,11 +198,21 @@ const ScriptGen = () => {
       // Save the raw OpenAI response for debugging
       setRawOpenAIResponse(promptData.rawResponse || JSON.stringify(promptData.prompts, null, 2));
       
-      // Step 3: Format segments for the UI
-      const formattedSegments: PromptSegment[] = promptData.prompts.map((item: any) => ({
+      // Calcular o número de segmentos que serão gerados
+      const numberOfSegments = promptData.prompts.length;
+      
+      // Dividir a transcrição em segmentos baseado no número de imagens
+      const transcriptionSegments = divideTranscriptionIntoSegments(
+        transcriptionResult.text, 
+        numberOfSegments
+      );
+      
+      // Step 3: Format segments for the UI incluindo os trechos da transcrição
+      const formattedSegments: PromptSegment[] = promptData.prompts.map((item: any, index: number) => ({
         id: item.id,
         prompt: item.prompt,
         timestamp: item.timestamp,
+        transcriptionSegment: transcriptionSegments[index] || "", // Adicionar o trecho correspondente
         imageUrl: null,
         videoUrl: null
       }));
@@ -213,11 +246,21 @@ const ScriptGen = () => {
       
       setRawOpenAIResponse(promptData.rawResponse || JSON.stringify(promptData.prompts, null, 2));
       
-      // Step 3: Format segments for the UI
-      const formattedSegments: PromptSegment[] = promptData.prompts.map((item: any) => ({
+      // Calcular o número de segmentos que serão gerados
+      const numberOfSegments = promptData.prompts.length;
+      
+      // Dividir a transcrição em segmentos baseado no número de imagens
+      const transcriptionSegments = divideTranscriptionIntoSegments(
+        transcription.text, 
+        numberOfSegments
+      );
+      
+      // Step 3: Format segments for the UI incluindo os trechos da transcrição
+      const formattedSegments: PromptSegment[] = promptData.prompts.map((item: any, index: number) => ({
         id: item.id,
         prompt: item.prompt,
         timestamp: item.timestamp,
+        transcriptionSegment: transcriptionSegments[index] || "", // Adicionar o trecho correspondente
         imageUrl: null,
         videoUrl: null
       }));
@@ -616,44 +659,58 @@ const ScriptGen = () => {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="flex flex-col md:flex-row gap-4">
-                      <div className="flex-1">
-                        <label className="text-sm font-medium mb-2 block">Prompt</label>
-                        <Textarea 
-                          value={segment.prompt}
-                          onChange={(e) => handlePromptChange(segment.id, e.target.value)}
-                          rows={3}
-                          className="mb-2"
-                        />
+                    <div className="flex flex-col gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex-1">
+                          <label className="text-sm font-medium mb-2 block">Prompt</label>
+                          <Textarea 
+                            value={segment.prompt}
+                            onChange={(e) => handlePromptChange(segment.id, e.target.value)}
+                            rows={3}
+                            className="mb-2"
+                          />
+                        </div>
+                        
+                        <div className="w-full">
+                          <label className="text-sm font-medium mb-2 block">Imagem</label>
+                          <div className="bg-accent aspect-video flex items-center justify-center rounded-md overflow-hidden">
+                            {segment.imageUrl ? (
+                              <img 
+                                src={segment.imageUrl} 
+                                alt={`Imagem para ${segment.timestamp}`}
+                                className="w-full h-full object-cover" 
+                              />
+                            ) : segment.isGenerating ? (
+                              <div className="flex flex-col items-center justify-center h-full">
+                                <div className="h-8 w-8 border-4 border-t-primary rounded-full animate-spin mb-2"></div>
+                                <p className="text-xs text-muted-foreground">Gerando...</p>
+                              </div>
+                            ) : (
+                              <ImageIcon className="h-10 w-10 text-muted-foreground" />
+                            )}
+                          </div>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="mt-2 w-full"
+                            onClick={() => handleGenerateImage(segment.id)}
+                            disabled={segment.isGenerating}
+                          >
+                            {segment.imageUrl ? "Regenerar Imagem" : "Gerar Imagem"}
+                          </Button>
+                        </div>
                       </div>
                       
-                      <div className="w-full md:w-[300px]">
-                        <label className="text-sm font-medium mb-2 block">Imagem</label>
-                        <div className="bg-accent aspect-video flex items-center justify-center rounded-md overflow-hidden">
-                          {segment.imageUrl ? (
-                            <img 
-                              src={segment.imageUrl} 
-                              alt={`Imagem para ${segment.timestamp}`}
-                              className="w-full h-full object-cover" 
-                            />
-                          ) : segment.isGenerating ? (
-                            <div className="flex flex-col items-center justify-center h-full">
-                              <div className="h-8 w-8 border-4 border-t-primary rounded-full animate-spin mb-2"></div>
-                              <p className="text-xs text-muted-foreground">Gerando...</p>
-                            </div>
-                          ) : (
-                            <ImageIcon className="h-10 w-10 text-muted-foreground" />
-                          )}
+                      {/* Nova seção para mostrar o trecho da transcrição */}
+                      <div className="w-full">
+                        <label className="text-sm font-medium mb-2 block">
+                          Trecho da Transcrição Original
+                        </label>
+                        <div className="bg-muted p-3 rounded-md">
+                          <p className="text-sm text-muted-foreground leading-relaxed">
+                            {segment.transcriptionSegment || "Trecho não disponível"}
+                          </p>
                         </div>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="mt-2 w-full"
-                          onClick={() => handleGenerateImage(segment.id)}
-                          disabled={segment.isGenerating}
-                        >
-                          {segment.imageUrl ? "Regenerar Imagem" : "Gerar Imagem"}
-                        </Button>
                       </div>
                       
                       {segment.videoUrl && (
