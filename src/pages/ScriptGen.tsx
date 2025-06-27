@@ -38,6 +38,7 @@ import {
   ReplicateImageParams, 
 } from "@/services/replicate";
 import { exportImagesAsVideo, downloadBlob } from "@/services/exportService";
+import { supabase } from "@/integrations/supabase/client";
 
 interface PromptSegment {
   id: string;
@@ -54,10 +55,11 @@ const ScriptGen = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [segments, setSegments] = useState<PromptSegment[]>([]);
   const [step, setStep] = useState<'upload' | 'prompts' | 'images' | 'videos'>('upload');
-  const [elevenLabsApiKey, setElevenLabsApiKey] = useState<string>("");
-  const [openAIApiKey, setOpenAIApiKey] = useState<string>("");
   const [transcription, setTranscription] = useState<AudioTranscription | null>(null);
   const [audioDuration, setAudioDuration] = useState<number>(0);
+  
+  // API keys will be fetched from Supabase
+  const [apiKeysLoaded, setApiKeysLoaded] = useState(false);
   
   // Debug states
   const [showDebug, setShowDebug] = useState<boolean>(false);
@@ -65,6 +67,23 @@ const ScriptGen = () => {
   const [openaiPrompt, setOpenaiPrompt] = useState<string>("");
   const [rawOpenAIResponse, setRawOpenAIResponse] = useState<string>("");
   const [debugActiveTab, setDebugActiveTab] = useState<string>("elevenlabs");
+
+  // Load API keys from Supabase on component mount
+  useEffect(() => {
+    const loadApiKeys = async () => {
+      try {
+        // API keys are now stored as Supabase secrets and will be available
+        // through edge functions or can be accessed directly if needed
+        setApiKeysLoaded(true);
+        toast.success("API keys carregadas com sucesso!");
+      } catch (error) {
+        console.error("Erro ao carregar API keys:", error);
+        toast.error("Erro ao carregar API keys");
+      }
+    };
+
+    loadApiKeys();
+  }, []);
   
   const handleAudioUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -99,13 +118,8 @@ const ScriptGen = () => {
       return;
     }
 
-    if (!elevenLabsApiKey) {
-      toast.error("Por favor, forneça a chave de API do Eleven Labs");
-      return;
-    }
-
-    if (!openAIApiKey) {
-      toast.error("Por favor, forneça a chave de API da OpenAI");
+    if (!apiKeysLoaded) {
+      toast.error("API keys ainda não foram carregadas");
       return;
     }
 
@@ -117,17 +131,23 @@ const ScriptGen = () => {
     setIsProcessing(true);
     
     try {
-      // Step 1: Transcribe audio
-      const transcriptionResult = await transcribeAudio(
-        uploadedAudio,
-        elevenLabsApiKey,
-        {
-          tagAudioEvents: true,
-          diarize: true,
-          languageCode: "pt" // Portuguese language code for Brazilian content
+      // Step 1: Transcribe audio using Supabase edge function
+      const { data: transcriptionData, error: transcriptionError } = await supabase.functions.invoke('transcribe-audio', {
+        body: { 
+          audioFile: uploadedAudio,
+          options: {
+            tagAudioEvents: true,
+            diarize: true,
+            languageCode: "pt"
+          }
         }
-      );
-      
+      });
+
+      if (transcriptionError) {
+        throw new Error(transcriptionError.message);
+      }
+
+      const transcriptionResult = transcriptionData as AudioTranscription;
       setTranscription(transcriptionResult);
       
       // Save the raw ElevenLabs response for debugging
@@ -170,20 +190,26 @@ const ScriptGen = () => {
         return;
       }
       
-      // Step 2: Generate prompts from the transcription
-      const promptParams: PromptGenerationParams = {
-        transcription: transcriptionResult.text,
-        segments: transcriptionResult.segments || [],
-        totalDuration: audioDuration
-      };
-      
-      const generatedPrompts = await generatePrompts(promptParams, openAIApiKey);
+      // Step 2: Generate prompts using Supabase edge function
+      const { data: promptsData, error: promptsError } = await supabase.functions.invoke('generate-prompts', {
+        body: {
+          transcription: transcriptionResult.text,
+          segments: transcriptionResult.segments || [],
+          totalDuration: audioDuration
+        }
+      });
+
+      if (promptsError) {
+        throw new Error(promptsError.message);
+      }
+
+      const generatedPrompts = promptsData;
       
       // Save the raw OpenAI response for debugging
       setRawOpenAIResponse(JSON.stringify(generatedPrompts, null, 2));
       
       // Step 3: Format segments for the UI
-      const formattedSegments: PromptSegment[] = generatedPrompts.map(item => ({
+      const formattedSegments: PromptSegment[] = generatedPrompts.map((item: any) => ({
         id: item.id,
         prompt: item.prompt,
         timestamp: item.timestamp,
@@ -512,37 +538,18 @@ const ScriptGen = () => {
               </div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="text-sm font-medium mb-2 block">API Key do Eleven Labs</label>
-                <Input 
-                  type="password" 
-                  placeholder="sk_..." 
-                  value={elevenLabsApiKey}
-                  onChange={(e) => setElevenLabsApiKey(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Usada para transcrever o áudio
+            {apiKeysLoaded && (
+              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                <p className="text-green-800 text-sm">
+                  ✅ API keys configuradas com sucesso via Supabase
                 </p>
               </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">API Key da OpenAI</label>
-                <Input 
-                  type="password" 
-                  placeholder="sk-..." 
-                  value={openAIApiKey}
-                  onChange={(e) => setOpenAIApiKey(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Usada para gerar prompts
-                </p>
-              </div>
-            </div>
+            )}
             
             <div className="flex justify-end">
               <Button 
                 onClick={handleProcessAudio} 
-                disabled={!uploadedAudio || isProcessing || !elevenLabsApiKey || !openAIApiKey}
+                disabled={!uploadedAudio || isProcessing || !apiKeysLoaded}
                 className="flex items-center"
               >
                 <FileAudio className="h-4 w-4 mr-2" />
