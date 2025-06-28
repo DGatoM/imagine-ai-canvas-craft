@@ -83,12 +83,13 @@ const divideTranscriptionIntoSegments = (transcription: string, numberOfSegments
 const ScriptGen = () => {
   const [uploadedAudio, setUploadedAudio] = useState<File | null>(null);
   const [aspectRatio, setAspectRatio] = useState<string>("16:9");
-  const [webhookUrl, setWebhookUrl] = useState<string>("");
+  const [webhookUrl, setWebhookUrl] = useState<string>("https://hook.us2.make.com/j08hwdj592a645rj89i0vgmtmi6cw0h2");
   const [isProcessing, setIsProcessing] = useState(false);
   const [segments, setSegments] = useState<PromptSegment[]>([]);
   const [step, setStep] = useState<'upload' | 'prompts' | 'images' | 'videos'>('upload');
   const [transcription, setTranscription] = useState<AudioTranscription | null>(null);
   const [audioDuration, setAudioDuration] = useState<number>(0);
+  const [exportedVideoUrl, setExportedVideoUrl] = useState<string | null>(null);
   
   // Debug states
   const [showDebug, setShowDebug] = useState<boolean>(false);
@@ -456,58 +457,15 @@ const ScriptGen = () => {
         throw new Error(`Webhook retornou erro: ${response.status} ${response.statusText}`);
       }
 
-      // Check if response is a video file
-      const contentType = response.headers.get("content-type");
+      // Get the video URL from webhook response
+      const videoUrl = await response.text();
+      console.log("URL do vídeo recebida:", videoUrl);
       
-      if (contentType && (contentType.includes("video/") || contentType.includes("application/octet-stream"))) {
-        // Response is a video file - download it directly
-        const videoBlob = await response.blob();
-        
-        // Download the video
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const filename = `script-video-${timestamp}.mp4`;
-        
-        const url = URL.createObjectURL(videoBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        
-        toast.success("Vídeo exportado com sucesso!");
+      if (videoUrl && videoUrl.startsWith('http')) {
+        setExportedVideoUrl(videoUrl);
+        toast.success("Vídeo processado com sucesso! Clique em 'Download Video' para baixar.");
       } else {
-        // Response might be JSON with video URL
-        const result = await response.json();
-        console.log("Resposta do webhook:", result);
-        
-        if (result.videoUrl || result.video_url || result.url) {
-          const videoUrl = result.videoUrl || result.video_url || result.url;
-          
-          // Download video from URL
-          const videoResponse = await fetch(videoUrl);
-          if (!videoResponse.ok) {
-            throw new Error("Falha ao baixar o vídeo da URL fornecida");
-          }
-          
-          const videoBlob = await videoResponse.blob();
-          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-          const filename = `script-video-${timestamp}.mp4`;
-          
-          const url = URL.createObjectURL(videoBlob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = filename;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-          
-          toast.success("Vídeo exportado com sucesso!");
-        } else {
-          throw new Error("Webhook não retornou um vídeo válido");
-        }
+        throw new Error("Webhook não retornou uma URL válida");
       }
       
     } catch (error) {
@@ -515,6 +473,43 @@ const ScriptGen = () => {
       toast.error(`Falha na exportação: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const handleDownloadVideo = async () => {
+    if (!exportedVideoUrl) {
+      toast.error("URL do vídeo não disponível");
+      return;
+    }
+
+    try {
+      toast.info("Baixando vídeo...");
+      
+      // Download video from URL
+      const videoResponse = await fetch(exportedVideoUrl);
+      if (!videoResponse.ok) {
+        throw new Error("Falha ao baixar o vídeo");
+      }
+      
+      const videoBlob = await videoResponse.blob();
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `script-video-${timestamp}.mp4`;
+      
+      // Create download link
+      const url = URL.createObjectURL(videoBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast.success("Vídeo baixado com sucesso!");
+      
+    } catch (error) {
+      console.error("Erro ao baixar vídeo:", error);
+      toast.error(`Falha no download: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
   };
 
@@ -548,7 +543,7 @@ const ScriptGen = () => {
           <CardHeader>
             <CardTitle>Configuração do Vídeo</CardTitle>
             <CardDescription>
-              Faça upload de um áudio, escolha o formato do vídeo e configure o webhook para exportação.
+              Faça upload de um áudio e escolha o formato do vídeo.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -584,20 +579,6 @@ const ScriptGen = () => {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-            
-            <div>
-              <label className="text-sm font-medium mb-2 block">URL do Webhook para Exportação</label>
-              <Input 
-                type="url"
-                placeholder="https://seu-webhook.com/endpoint"
-                value={webhookUrl}
-                onChange={(e) => setWebhookUrl(e.target.value)}
-                className="w-full"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                O webhook receberá um JSON com a lista de URLs das imagens e deve retornar o vídeo processado.
-              </p>
             </div>
             
             <div className="flex justify-end">
@@ -701,10 +682,16 @@ const ScriptGen = () => {
                   <ImageIcon className="h-4 w-4 mr-2" />
                   Gerar Imagens
                 </Button>
-                {hasGeneratedImages && (
-                  <Button onClick={handleExportVideo} disabled={isProcessing || !webhookUrl}>
+                {hasGeneratedImages && !exportedVideoUrl && (
+                  <Button onClick={handleExportVideo} disabled={isProcessing}>
                     <Download className="h-4 w-4 mr-2" />
                     Exportar Vídeo
+                  </Button>
+                )}
+                {exportedVideoUrl && (
+                  <Button onClick={handleDownloadVideo} className="bg-green-600 hover:bg-green-700">
+                    <Download className="h-4 w-4 mr-2" />
+                    Download Video
                   </Button>
                 )}
                 {(step === 'images' || step === 'videos') && (
