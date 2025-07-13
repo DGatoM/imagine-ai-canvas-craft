@@ -52,7 +52,7 @@ export const generatePrompts = async (
     2. Divida essa duração em segmentos de EXATAMENTE 5 segundos cada (crie segmentos de 0:00-0:05, 0:05-0:10, etc.)
     3. IMPORTANTE: Se a duração não for divisível exatamente por 5, SEMPRE arredonde para cima e crie um segmento adicional para o tempo restante. Por exemplo, para um áudio de 27 segundos, você deve criar 6 segmentos (0:00-0:05, 0:05-0:10, 0:10-0:15, 0:15-0:20, 0:20-0:25, 0:25-0:27).
     4. Calculando matematicamente, para esta duração de ${params.totalDuration} segundos, você deve criar EXATAMENTE ${numberOfSegments} segmentos.
-    5. Para cada segmento, crie um prompt em inglês para geração de imagem que represente o que está sendo dito naquele trecho
+    5. Para cada segmento, crie um prompt em inglês para geração de imagem que represente o que está sendo dito naquele trecho. Procure descrever visualmente o conceito, por exemplo, se foi dito algo como 'esse problema vai impactar todos que usam inteligencia artificial', voce deveria montar um prompt, por exmeplo, mostrando uma pessoa na frente do computador preocupada vendo um mensagem de erro na tela. Se o texto diz 'meu nome é Danilo Gato e sou consultor de IA', você deveria montar um prompt apenas com uma imagem de Inteligência artificial em ambiente de trabalho aumentando a produtividade. O vídeo já possui uma pessoa falando, essas imagens que você está criando são apenas para ilustrar, então leve isso em consideração.
     6. IMPORTANTE: Cada prompt DEVE SEMPRE começar com "A realistic high resolution photo of" e deve ser bastante detalhado, descrevendo o ambiente, iluminação, expressões, ações e elementos importantes da cena.
     7. Retorne apenas um array JSON no formato abaixo (sem explicações adicionais):
     [
