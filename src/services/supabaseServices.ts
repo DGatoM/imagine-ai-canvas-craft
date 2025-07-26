@@ -39,13 +39,15 @@ export const transcribeAudioWithSupabase = async (
 export const generatePromptsWithSupabase = async (
   transcription: string,
   totalDuration: number,
-  customPrompt?: string
+  customPrompt?: string,
+  transcriptionSegments?: string[]
 ) => {
   const { data, error } = await supabase.functions.invoke('generate-prompts', {
     body: {
       transcription,
       totalDuration,
-      customPrompt
+      customPrompt,
+      transcriptionSegments
     },
   });
 

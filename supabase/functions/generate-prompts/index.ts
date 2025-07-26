@@ -20,14 +20,81 @@ serve(async (req) => {
       throw new Error('OpenAI API key not configured in Supabase secrets');
     }
 
-    const { transcription, totalDuration, customPrompt } = await req.json();
+    const { transcription, totalDuration, customPrompt, transcriptionSegments } = await req.json();
 
     if (!transcription || !totalDuration) {
       throw new Error('Transcription and total duration are required');
     }
 
+    // If transcriptionSegments are provided, use them instead of generating segments
+    if (transcriptionSegments && Array.isArray(transcriptionSegments)) {
+      const prompts = [];
+      
+      for (let i = 0; i < transcriptionSegments.length; i++) {
+        const segment = transcriptionSegments[i];
+        const startTime = i * 5;
+        const endTime = Math.min((i + 1) * 5, totalDuration);
+        const timestamp = `${Math.floor(startTime / 60)}:${(startTime % 60).toString().padStart(2, '0')} - ${Math.floor(endTime / 60)}:${(endTime % 60).toString().padStart(2, '0')}`;
+        
+        const segmentPrompt = `
+        Contexto completo da transcrição: ${transcription}
+        
+        Trecho específico para esta imagem: "${segment}"
+        
+        Sua tarefa:
+        1. Analise o trecho específico: "${segment}"
+        2. Considere o contexto completo da transcrição para entender melhor o assunto
+        3. Crie um prompt em inglês que ilustre de forma metafórica ou literal o que está sendo falado neste trecho
+        4. O prompt DEVE SEMPRE começar com "A realistic high resolution photo of"
+        5. Seja bastante detalhado, incluindo ambiente, iluminação, expressões, ações e elementos relevantes
+        6. Lembre-se que já há um apresentador no vídeo, então foque apenas em ilustrar o assunto
+        7. Use metáforas visuais quando apropriado para representar conceitos abstratos
+        8. Retorne apenas o prompt (sem explicações adicionais)
+        `;
+
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${openAIApiKey}`
+          },
+          body: JSON.stringify({
+            model: "gpt-4.1-2025-04-14",
+            messages: [
+              {
+                role: "system",
+                content: systemPrompt
+              },
+              {
+                role: "user",
+                content: segmentPrompt
+              }
+            ]
+          })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error?.message || `Failed to generate prompt for segment ${i + 1}`);
+        }
+
+        const data = await response.json();
+        const promptContent = data.choices[0].message.content.trim();
+
+        prompts.push({
+          id: (i + 1).toString(),
+          timestamp: timestamp,
+          prompt: promptContent
+        });
+      }
+
+      return new Response(JSON.stringify({ prompts, rawResponse: `Generated ${prompts.length} prompts using individual segments` }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const systemPrompt = 
-      "Você vai receber a transcrição de um vídeo. Sua tarefa é analisar a duração total do áudio (fornecida na solicitação) e dividi-la em segmentos de 5 segundos. É CRUCIAL que você SEMPRE arredonde para cima no último segmento, garantindo que TODA a duração seja coberta. Por exemplo, para um áudio de 27 segundos, você deve criar 6 segmentos (5 completos + 1 parcial). Para cada segmento, crie um prompt em inglês que ilustre o que está sendo dito naquele momento específico. Cada prompt DEVE SEMPRE começar com 'A realistic high resolution photo of' e ser bastante detalhado, incluindo elementos como ambiente, iluminação, expressões faciais, e outros detalhes relevantes. Lembre-se que a IA de geração de imagem não terá nenhum contexto adicional além deste prompt. Considere o contexto completo, incluindo o que foi dito antes e o que será dito depois, para que as imagens sejam coerentes entre si.";
+      "Você vai receber a transcrição de um vídeo e um trecho específico dessa transcrição. Sua tarefa é criar um prompt em inglês para geração de imagem que ilustre de forma metafórica ou literal o que está sendo falado neste trecho específico. O prompt DEVE SEMPRE começar com 'A realistic high resolution photo of' e ser bastante detalhado, incluindo elementos como ambiente, iluminação, expressões faciais, e outros detalhes relevantes. Lembre-se que já há um apresentador no vídeo final, então não é necessário adicionar algum narrador nas imagens, apenas ilustrar o assunto sobre o qual ele está falando. Use metáforas visuais quando apropriado para representar conceitos abstratos.";
 
     const numberOfSegments = Math.ceil(totalDuration / 5);
     

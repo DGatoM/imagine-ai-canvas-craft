@@ -191,23 +191,25 @@ const ScriptGen = () => {
         return;
       }
       
-      // Step 2: Generate prompts using Supabase function
-      const promptData = await generatePromptsWithSupabase(
-        transcriptionResult.text,
-        audioDuration
-      );
+      // Primeiro calcular quantos segmentos precisamos
+      const numberOfSegments = Math.ceil(audioDuration / 5);
       
-      // Save the raw OpenAI response for debugging
-      setRawOpenAIResponse(promptData.rawResponse || JSON.stringify(promptData.prompts, null, 2));
-      
-      // Calcular o número de segmentos que serão gerados
-      const numberOfSegments = promptData.prompts.length;
-      
-      // Dividir a transcrição em segmentos baseado no número de imagens
+      // Dividir a transcrição em segmentos baseado na duração
       const transcriptionSegments = divideTranscriptionIntoSegments(
         transcriptionResult.text, 
         numberOfSegments
       );
+
+      // Step 2: Generate prompts using Supabase function with transcription segments
+      const promptData = await generatePromptsWithSupabase(
+        transcriptionResult.text,
+        audioDuration,
+        undefined, // no custom prompt
+        transcriptionSegments
+      );
+      
+      // Save the raw OpenAI response for debugging
+      setRawOpenAIResponse(promptData.rawResponse || JSON.stringify(promptData.prompts, null, 2));
       
       // Step 3: Format segments for the UI incluindo os trechos da transcrição
       const formattedSegments: PromptSegment[] = promptData.prompts.map((item: any, index: number) => ({
@@ -239,23 +241,24 @@ const ScriptGen = () => {
     setIsProcessing(true);
     
     try {
-      // Use the custom prompt with the Supabase function
-      const promptData = await generatePromptsWithSupabase(
-        transcription.text,
-        audioDuration,
-        openaiPrompt
-      );
+      // Primeiro calcular quantos segmentos precisamos
+      const numberOfSegments = Math.ceil(audioDuration / 5);
       
-      setRawOpenAIResponse(promptData.rawResponse || JSON.stringify(promptData.prompts, null, 2));
-      
-      // Calcular o número de segmentos que serão gerados
-      const numberOfSegments = promptData.prompts.length;
-      
-      // Dividir a transcrição em segmentos baseado no número de imagens
+      // Dividir a transcrição em segmentos baseado na duração
       const transcriptionSegments = divideTranscriptionIntoSegments(
         transcription.text, 
         numberOfSegments
       );
+
+      // Use the custom prompt with the Supabase function
+      const promptData = await generatePromptsWithSupabase(
+        transcription.text,
+        audioDuration,
+        openaiPrompt,
+        transcriptionSegments
+      );
+      
+      setRawOpenAIResponse(promptData.rawResponse || JSON.stringify(promptData.prompts, null, 2));
       
       // Step 3: Format segments for the UI incluindo os trechos da transcrição
       const formattedSegments: PromptSegment[] = promptData.prompts.map((item: any, index: number) => ({
