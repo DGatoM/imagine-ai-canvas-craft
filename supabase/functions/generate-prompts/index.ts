@@ -26,6 +26,9 @@ serve(async (req) => {
       throw new Error('Transcription and total duration are required');
     }
 
+    const systemPrompt = 
+      "Você vai receber a transcrição de um vídeo e um trecho específico dessa transcrição. Sua tarefa é criar um prompt em inglês para geração de imagem que ilustre de forma metafórica ou literal o que está sendo falado neste trecho específico. O prompt DEVE SEMPRE começar com 'A realistic high resolution photo of' e ser bastante detalhado, incluindo elementos como ambiente, iluminação, expressões faciais, e outros detalhes relevantes. Lembre-se que já há um apresentador no vídeo final, então não é necessário adicionar algum narrador nas imagens, apenas ilustrar o assunto sobre o qual ele está falando. Use metáforas visuais quando apropriado para representar conceitos abstratos.";
+
     // If transcriptionSegments are provided, use them instead of generating segments
     if (transcriptionSegments && Array.isArray(transcriptionSegments)) {
       const prompts = [];
@@ -59,7 +62,7 @@ serve(async (req) => {
             'Authorization': `Bearer ${openAIApiKey}`
           },
           body: JSON.stringify({
-            model: "gpt-4.1-2025-04-14",
+            model: "gpt-4o",
             messages: [
               {
                 role: "system",
