@@ -431,7 +431,7 @@ const ScriptGen = () => {
     setIsProcessing(true);
     
     try {
-      toast.info("Enviando imagens para processamento... Isso pode levar alguns minutos.");
+      toast.info("Enviando imagens para processamento... Isso pode levar até 1 minuto.");
       
       // Prepare the payload with image URLs in order
       const payload = {
@@ -447,28 +447,67 @@ const ScriptGen = () => {
 
       console.log("Enviando payload para webhook:", payload);
 
-      // Send to webhook
-      const response = await fetch(webhookUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+      // Send to webhook with 1 minute timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+        toast.error("Timeout: O processamento do vídeo demorou mais que 1 minuto. Tente novamente.");
+      }, 60000); // 1 minute timeout
 
-      if (!response.ok) {
-        throw new Error(`Webhook retornou erro: ${response.status} ${response.statusText}`);
-      }
+      try {
+        const response = await fetch(webhookUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        });
 
-      // Get the video URL from webhook response
-      const videoUrl = await response.text();
-      console.log("URL do vídeo recebida:", videoUrl);
-      
-      if (videoUrl && videoUrl.startsWith('http')) {
-        setExportedVideoUrl(videoUrl);
-        toast.success("Vídeo processado com sucesso! Clique em 'Download Video' para baixar.");
-      } else {
-        throw new Error("Webhook não retornou uma URL válida");
+        // Clear timeout if request completes
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Erro do webhook:", response.status, response.statusText, errorText);
+          throw new Error(`Webhook retornou erro: ${response.status} ${response.statusText}. Detalhes: ${errorText}`);
+        }
+
+        // Try to get response as text first
+        const responseText = await response.text();
+        console.log("Resposta bruta do webhook:", responseText);
+        
+        // Check if response is a valid URL
+        if (responseText && responseText.trim().startsWith('http')) {
+          const videoUrl = responseText.trim();
+          setExportedVideoUrl(videoUrl);
+          toast.success("Vídeo processado com sucesso! Clique em 'Download Video' para baixar.");
+        } else {
+          // If not a direct URL, try to parse as JSON
+          try {
+            const jsonResponse = JSON.parse(responseText);
+            if (jsonResponse.video_url || jsonResponse.url) {
+              const videoUrl = jsonResponse.video_url || jsonResponse.url;
+              setExportedVideoUrl(videoUrl);
+              toast.success("Vídeo processado com sucesso! Clique em 'Download Video' para baixar.");
+            } else {
+              throw new Error("Resposta não contém URL do vídeo");
+            }
+          } catch (parseError) {
+            console.error("Erro ao analisar resposta do webhook:", parseError);
+            throw new Error(`Webhook retornou resposta inválida: ${responseText}`);
+          }
+        }
+        
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        
+        if (fetchError.name === 'AbortError') {
+          console.error("Timeout na requisição do webhook");
+          return; // Error already shown by timeout handler
+        }
+        
+        throw fetchError;
       }
       
     } catch (error) {
