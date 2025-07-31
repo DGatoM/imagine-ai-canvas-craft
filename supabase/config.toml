@@ -1,1 +1,4 @@
 project_id = "pjybkapthvtuqvzlcybk"
+
+[functions.process-audio-to-video]
+verify_jwt = false
