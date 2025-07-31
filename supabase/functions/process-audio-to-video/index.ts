@@ -23,6 +23,14 @@ serve(async (req) => {
       throw new Error('mp3_url é obrigatório');
     }
 
+    // Verify OpenAI API key
+    const openaiKey = Deno.env.get('OpenAI_API');
+    if (!openaiKey) {
+      throw new Error('OpenAI_API não configurada');
+    }
+
+    console.log('OpenAI API Key configurada:', openaiKey ? 'Sim' : 'Não');
+
     console.log('Iniciando processamento completo para:', mp3_url);
 
     // Step 1: Download MP3 file
@@ -78,7 +86,7 @@ serve(async (req) => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
+            'Authorization': `Bearer ${Deno.env.get('OpenAI_API')}`,
           },
           body: JSON.stringify({
             model: 'gpt-image-1',
