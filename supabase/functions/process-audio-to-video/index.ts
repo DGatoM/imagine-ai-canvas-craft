@@ -1,0 +1,187 @@
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.2';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const { mp3_url, webhook_url } = await req.json();
+    
+    if (!mp3_url) {
+      throw new Error('mp3_url é obrigatório');
+    }
+    
+    if (!webhook_url) {
+      throw new Error('webhook_url é obrigatório');
+    }
+
+    console.log('Iniciando processamento completo para:', mp3_url);
+
+    // Step 1: Download MP3 file
+    console.log('1. Baixando arquivo MP3...');
+    const mp3Response = await fetch(mp3_url);
+    if (!mp3Response.ok) {
+      throw new Error(`Falha ao baixar MP3: ${mp3Response.statusText}`);
+    }
+    
+    const mp3Buffer = await mp3Response.arrayBuffer();
+    const mp3File = new File([mp3Buffer], 'audio.mp3', { type: 'audio/mpeg' });
+
+    // Step 2: Transcribe audio
+    console.log('2. Transcrevendo áudio...');
+    const formData = new FormData();
+    formData.append('file', mp3File);
+    formData.append('model_id', 'scribe_v1');
+
+    const { data: transcriptionData, error: transcriptionError } = await supabase.functions.invoke('transcribe-audio', {
+      body: formData,
+    });
+
+    if (transcriptionError) {
+      throw new Error(`Erro na transcrição: ${transcriptionError.message}`);
+    }
+
+    const transcription = transcriptionData.text;
+    console.log('Transcrição completa:', transcription?.substring(0, 100) + '...');
+
+    // Step 3: Generate prompts
+    console.log('3. Gerando prompts...');
+    const { data: promptsData, error: promptsError } = await supabase.functions.invoke('generate-prompts', {
+      body: {
+        transcription,
+        totalDuration: 60, // Default duration
+        customPrompt: undefined,
+        transcriptionSegments: undefined
+      },
+    });
+
+    if (promptsError) {
+      throw new Error(`Erro na geração de prompts: ${promptsError.message}`);
+    }
+
+    const prompts = promptsData.prompts;
+    console.log(`Prompts gerados: ${prompts.length} prompts`);
+
+    // Step 4: Generate images for each prompt
+    console.log('4. Gerando imagens...');
+    const imagePromises = prompts.map(async (prompt: any, index: number) => {
+      try {
+        const response = await fetch('https://api.openai.com/v1/images/generations', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
+          },
+          body: JSON.stringify({
+            model: 'gpt-image-1',
+            prompt: prompt.prompt,
+            n: 1,
+            size: '1024x1024',
+            quality: 'high',
+            output_format: 'png'
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Erro na geração da imagem ${index + 1}: ${response.statusText}`);
+        }
+
+        const imageData = await response.json();
+        const imageUrl = imageData.data[0].url;
+        
+        console.log(`Imagem ${index + 1} gerada:`, imageUrl);
+        
+        return {
+          imageUrl,
+          timestamp: prompt.timestamp
+        };
+      } catch (error) {
+        console.error(`Erro ao gerar imagem ${index + 1}:`, error);
+        throw error;
+      }
+    });
+
+    const images = await Promise.all(imagePromises);
+    console.log(`Todas as ${images.length} imagens foram geradas`);
+
+    // Step 5: Export video using webhook
+    console.log('5. Exportando vídeo...');
+    const videoPayload = {
+      images: images.map(img => img.imageUrl),
+      timestamps: images.map(img => img.timestamp),
+      audio_url: mp3_url
+    };
+
+    const videoResponse = await fetch(webhook_url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(videoPayload),
+    });
+
+    if (!videoResponse.ok) {
+      const errorText = await videoResponse.text();
+      throw new Error(`Erro no webhook de vídeo: ${videoResponse.status} ${errorText}`);
+    }
+
+    const videoResponseText = await videoResponse.text();
+    let videoUrl;
+
+    // Check if response is a direct URL or JSON
+    if (videoResponseText.trim().startsWith('http')) {
+      videoUrl = videoResponseText.trim();
+    } else {
+      try {
+        const jsonResponse = JSON.parse(videoResponseText);
+        videoUrl = jsonResponse.video_url || jsonResponse.url;
+      } catch {
+        throw new Error('Resposta do webhook inválida');
+      }
+    }
+
+    if (!videoUrl) {
+      throw new Error('URL do vídeo não encontrada na resposta');
+    }
+
+    console.log('Processamento completo! URL do vídeo:', videoUrl);
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        video_url: videoUrl,
+        transcription,
+        prompts_count: prompts.length,
+        images_count: images.length
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
+
+  } catch (error) {
+    console.error('Erro no processamento completo:', error);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error.message
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
+  }
+});
