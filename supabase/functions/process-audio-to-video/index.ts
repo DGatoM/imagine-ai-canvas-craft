@@ -17,14 +17,10 @@ serve(async (req) => {
   }
 
   try {
-    const { mp3_url, webhook_url } = await req.json();
+    const { mp3_url } = await req.json();
     
     if (!mp3_url) {
       throw new Error('mp3_url é obrigatório');
-    }
-    
-    if (!webhook_url) {
-      throw new Error('webhook_url é obrigatório');
     }
 
     console.log('Iniciando processamento completo para:', mp3_url);
@@ -116,53 +112,17 @@ serve(async (req) => {
     const images = await Promise.all(imagePromises);
     console.log(`Todas as ${images.length} imagens foram geradas`);
 
-    // Step 5: Export video using webhook
-    console.log('5. Exportando vídeo...');
-    const videoPayload = {
-      images: images.map(img => img.imageUrl),
-      timestamps: images.map(img => img.timestamp),
-      audio_url: mp3_url
-    };
-
-    const videoResponse = await fetch(webhook_url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(videoPayload),
-    });
-
-    if (!videoResponse.ok) {
-      const errorText = await videoResponse.text();
-      throw new Error(`Erro no webhook de vídeo: ${videoResponse.status} ${errorText}`);
-    }
-
-    const videoResponseText = await videoResponse.text();
-    let videoUrl;
-
-    // Check if response is a direct URL or JSON
-    if (videoResponseText.trim().startsWith('http')) {
-      videoUrl = videoResponseText.trim();
-    } else {
-      try {
-        const jsonResponse = JSON.parse(videoResponseText);
-        videoUrl = jsonResponse.video_url || jsonResponse.url;
-      } catch {
-        throw new Error('Resposta do webhook inválida');
-      }
-    }
-
-    if (!videoUrl) {
-      throw new Error('URL do vídeo não encontrada na resposta');
-    }
-
-    console.log('Processamento completo! URL do vídeo:', videoUrl);
+    // Step 5: Return generated content
+    console.log('5. Processamento completo!');
 
     return new Response(
       JSON.stringify({
         success: true,
-        video_url: videoUrl,
         transcription,
+        prompts: prompts.map((p: any) => p.prompt),
+        images: images.map(img => img.imageUrl),
+        timestamps: images.map(img => img.timestamp),
+        audio_url: mp3_url,
         prompts_count: prompts.length,
         images_count: images.length
       }),
