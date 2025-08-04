@@ -52,7 +52,7 @@ serve(async (req) => {
         5. Seja bastante detalhado, incluindo ambiente, iluminação, expressões, ações e elementos relevantes
         6. Lembre-se que já há um apresentador no vídeo, então foque apenas em ilustrar o assunto
         7. Use metáforas visuais quando apropriado para representar conceitos abstratos
-        8. Retorne apenas o prompt (sem explicações adicionais)
+        8. Retorne apenas o prompt (sem explicações adicionais). Jamais use aspas duplas no prompt, se precisar, use aspas simples.
         `;
 
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
