@@ -82,8 +82,6 @@ serve(async (req) => {
     console.log('4. Gerando imagens...');
     const imagePromises = prompts.map(async (prompt: any, index: number) => {
       try {
-        console.log(`Gerando imagem ${index + 1} com prompt:`, prompt.prompt.substring(0, 100) + '...');
-        
         const response = await fetch('https://api.openai.com/v1/images/generations', {
           method: 'POST',
           headers: {
@@ -91,30 +89,23 @@ serve(async (req) => {
             'Authorization': `Bearer ${Deno.env.get('OpenAI_API')}`,
           },
           body: JSON.stringify({
-            model: 'dall-e-3',
+            model: 'gpt-image-1',
             prompt: prompt.prompt,
             n: 1,
             size: '1024x1024',
-            quality: 'hd',
-            response_format: 'url'
+            quality: 'high',
+            output_format: 'png'
           }),
         });
 
         if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`Erro na API OpenAI para imagem ${index + 1}:`, errorText);
-          throw new Error(`Erro na geração da imagem ${index + 1}: ${response.statusText} - ${errorText}`);
+          throw new Error(`Erro na geração da imagem ${index + 1}: ${response.statusText}`);
         }
 
         const imageData = await response.json();
-        
-        if (!imageData.data || !imageData.data[0] || !imageData.data[0].url) {
-          console.error(`Resposta inválida da API para imagem ${index + 1}:`, imageData);
-          throw new Error(`URL da imagem ${index + 1} não encontrada na resposta`);
-        }
-        
         const imageUrl = imageData.data[0].url;
-        console.log(`Imagem ${index + 1} gerada com sucesso:`, imageUrl);
+        
+        console.log(`Imagem ${index + 1} gerada:`, imageUrl);
         
         return {
           imageUrl,
@@ -122,56 +113,24 @@ serve(async (req) => {
         };
       } catch (error) {
         console.error(`Erro ao gerar imagem ${index + 1}:`, error);
-        throw new Error(`Etapa 4 - Erro ao gerar imagem ${index + 1}: ${error.message}`);
+        throw error;
       }
     });
 
     const images = await Promise.all(imagePromises);
-    console.log(`Todas as ${images.length} imagens foram geradas com sucesso`);
+    console.log(`Todas as ${images.length} imagens foram geradas`);
 
-    // Step 5: Send images to video webhook
-    console.log('5. Enviando imagens para criação do vídeo...');
-    const imageUrls = images.map(img => img.imageUrl);
-    
-    // Aqui você precisa adicionar a URL do seu webhook de criação de vídeo
-    const videoWebhookUrl = Deno.env.get('VIDEO_WEBHOOK_URL');
-    if (!videoWebhookUrl) {
-      throw new Error('Etapa 5 - VIDEO_WEBHOOK_URL não configurada');
-    }
-
-    const videoResponse = await fetch(videoWebhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        images: imageUrls,
-        audio_url: mp3_url,
-        transcription: transcription
-      }),
-    });
-
-    if (!videoResponse.ok) {
-      const errorText = await videoResponse.text();
-      console.error('Erro no webhook de vídeo:', errorText);
-      throw new Error(`Etapa 5 - Erro na criação do vídeo: ${videoResponse.statusText} - ${errorText}`);
-    }
-
-    const videoResult = await videoResponse.text();
-    console.log('Vídeo criado com sucesso:', videoResult);
-
-    // Step 6: Return complete result
-    console.log('6. Processamento completo com sucesso!');
+    // Step 5: Return generated content
+    console.log('5. Processamento completo!');
 
     return new Response(
       JSON.stringify({
         success: true,
         transcription,
         prompts: prompts.map((p: any) => p.prompt),
-        images: imageUrls,
+        images: images.map(img => img.imageUrl),
         timestamps: images.map(img => img.timestamp),
         audio_url: mp3_url,
-        video_url: videoResult,
         prompts_count: prompts.length,
         images_count: images.length
       }),
