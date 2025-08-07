@@ -102,8 +102,7 @@ serve(async (req) => {
           },
           body: JSON.stringify({
             prompt: prompt.prompt,
-            aspect_ratio: '16:9',
-            num_outputs: 1
+            'aspect-ratio': '16:9'
           }),
         });
 
