@@ -140,11 +140,8 @@ serve(async (req) => {
     currentStep = 'Criação do vídeo';
     console.log('ETAPA 5: Enviando imagens para criação do vídeo...');
     
-    // You'll need to configure this webhook URL
-    const videoWebhookUrl = Deno.env.get('VIDEO_WEBHOOK_URL');
-    if (!videoWebhookUrl) {
-      throw new Error('VIDEO_WEBHOOK_URL não configurada');
-    }
+    // Usar URL específica do webhook de vídeo
+    const videoWebhookUrl = 'https://hook.us2.make.com/j08hwdj592a645rj89i0vgmtmi6cw0h2';
 
     const videoResponse = await fetch(videoWebhookUrl, {
       method: 'POST',
