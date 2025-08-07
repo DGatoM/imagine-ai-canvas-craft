@@ -90,6 +90,7 @@ const ScriptGen = () => {
   const [transcription, setTranscription] = useState<AudioTranscription | null>(null);
   const [audioDuration, setAudioDuration] = useState<number>(0);
   const [exportedVideoUrl, setExportedVideoUrl] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
   
   // Debug states
   const [showDebug, setShowDebug] = useState<boolean>(false);
@@ -416,6 +417,12 @@ const ScriptGen = () => {
   };
 
   const handleExportVideo = async () => {
+    // Prevent multiple concurrent exports
+    if (isExporting) {
+      console.log("Export already in progress, ignoring request");
+      return;
+    }
+
     const segmentsWithImages = segments.filter(segment => segment.imageUrl);
     
     if (segmentsWithImages.length === 0) {
@@ -428,6 +435,7 @@ const ScriptGen = () => {
       return;
     }
 
+    setIsExporting(true);
     setIsProcessing(true);
     
     try {
@@ -514,6 +522,7 @@ const ScriptGen = () => {
       console.error("Erro ao exportar vídeo:", error);
       toast.error(`Falha na exportação: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     } finally {
+      setIsExporting(false);
       setIsProcessing(false);
     }
   };
@@ -725,9 +734,9 @@ const ScriptGen = () => {
                   Gerar Imagens
                 </Button>
                 {hasGeneratedImages && !exportedVideoUrl && (
-                  <Button onClick={handleExportVideo} disabled={isProcessing}>
+                  <Button onClick={handleExportVideo} disabled={isProcessing || isExporting}>
                     <Download className="h-4 w-4 mr-2" />
-                    Exportar Vídeo
+                    {isExporting ? "Exportando..." : "Exportar Vídeo"}
                   </Button>
                 )}
                 {exportedVideoUrl && (
