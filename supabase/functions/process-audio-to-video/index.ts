@@ -113,16 +113,11 @@ serve(async (req) => {
         const webhookResult = await webhookResponse.json();
         console.log(`Resposta webhook para imagem ${i + 1}:`, webhookResult);
         
-        // Assuming webhook returns { output: [url] } or { url: string }
-        let imageUrl;
-        if (webhookResult.output && Array.isArray(webhookResult.output)) {
-          imageUrl = webhookResult.output[0];
-        } else if (webhookResult.url) {
-          imageUrl = webhookResult.url;
-        } else if (typeof webhookResult === 'string' && webhookResult.startsWith('http')) {
-          imageUrl = webhookResult;
-        } else {
-          throw new Error(`Formato de resposta inesperado do webhook para imagem ${i + 1}: ${JSON.stringify(webhookResult)}`);
+        // Extrair image_url do JSON retornado
+        const imageUrl = webhookResult.image_url;
+        
+        if (!imageUrl) {
+          throw new Error(`image_url não encontrado na resposta do webhook para imagem ${i + 1}: ${JSON.stringify(webhookResult)}`);
         }
         
         imageUrls.push(imageUrl);
