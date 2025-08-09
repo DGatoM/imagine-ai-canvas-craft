@@ -66,12 +66,49 @@ serve(async (req) => {
     // Step 3: Generate prompts
     currentStep = 'Geração de prompts';
     console.log('ETAPA 3: Gerando prompts com OpenAI...');
+
+    // Inferir duração real do áudio a partir da transcrição (segments/words)
+    let audioDurationSec = 60;
+    try {
+      if (transcriptionData?.segments?.length) {
+        const lastSeg = transcriptionData.segments[transcriptionData.segments.length - 1];
+        audioDurationSec = Math.max(1, Math.ceil(lastSeg?.end ?? 0));
+      } else if (transcriptionData?.words?.length) {
+        const lastWord = transcriptionData.words[transcriptionData.words.length - 1];
+        audioDurationSec = Math.max(1, Math.ceil(lastWord?.end ?? 0));
+      }
+    } catch (e) {
+      console.warn('Não foi possível inferir a duração a partir da transcrição, usando 60s como fallback.', e);
+      audioDurationSec = 60;
+    }
+
+    // Calcular número de segmentos de 5s, arredondando o último para cima
+    const numberOfSegments = Math.ceil(audioDurationSec / 5);
+
+    // Dividir a transcrição completa em trechos balanceados por palavra
+    function splitTranscription(text: string, parts: number): string[] {
+      if (!text || parts <= 0) return [];
+      const words = text.trim().split(/\s+/);
+      const per = Math.ceil(words.length / parts);
+      const result: string[] = [];
+      for (let i = 0; i < parts; i++) {
+        const start = i * per;
+        const end = Math.min(start + per, words.length);
+        result.push(words.slice(start, end).join(' '));
+      }
+      return result;
+    }
+
+    const transcriptionSegments = splitTranscription(transcription, numberOfSegments);
+
+    console.log(`Duração do áudio estimada: ~${audioDurationSec}s → ${numberOfSegments} segmentos de 5s (último arredondado para cima).`);
+
     const { data: promptsData, error: promptsError } = await supabase.functions.invoke('generate-prompts', {
       body: {
         transcription,
-        totalDuration: 60, // Default duration
+        totalDuration: audioDurationSec,
         customPrompt: undefined,
-        transcriptionSegments: undefined
+        transcriptionSegments
       },
     });
 
