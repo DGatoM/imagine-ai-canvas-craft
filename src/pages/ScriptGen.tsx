@@ -416,6 +416,83 @@ const ScriptGen = () => {
     }, 2000);
   };
 
+  // Process video response and set the URL
+  const processVideoResponse = async (responseText: string) => {
+    // Check if response is a valid URL
+    if (responseText && responseText.trim().startsWith('http')) {
+      const videoUrl = responseText.trim();
+      setExportedVideoUrl(videoUrl);
+      setIsExporting(false); // Reset export state on success
+      toast.success("Vídeo processado com sucesso! Clique em 'Download Video' para baixar.");
+    } else {
+      // If not a direct URL, try to parse as JSON
+      try {
+        const jsonResponse = JSON.parse(responseText);
+        if (jsonResponse.video_url || jsonResponse.url) {
+          const videoUrl = jsonResponse.video_url || jsonResponse.url;
+          setExportedVideoUrl(videoUrl);
+          setIsExporting(false); // Reset export state on success
+          toast.success("Vídeo processado com sucesso! Clique em 'Download Video' para baixar.");
+        } else {
+          throw new Error("Resposta não contém URL do vídeo");
+        }
+      } catch (parseError) {
+        console.error("Erro ao analisar resposta do webhook:", parseError);
+        throw new Error(`Webhook retornou resposta inválida: ${responseText}`);
+      }
+    }
+  };
+
+  // Poll for video result after 202 Accepted response
+  const pollForVideoResult = async (webhookUrl: string, originalPayload: any) => {
+    const maxPollingTime = 5 * 60 * 1000; // 5 minutes total
+    const pollInterval = 10000; // 10 seconds between polls
+    const startTime = Date.now();
+    
+    console.log("Iniciando polling para resultado do vídeo...");
+    
+    while (Date.now() - startTime < maxPollingTime) {
+      try {
+        // Wait before next poll
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+        
+        console.log("Verificando status do processamento...");
+        
+        // Make a new request to check status
+        const response = await fetch(webhookUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ ...originalPayload, check_status: true })
+        });
+
+        if (response.ok) {
+          const responseText = await response.text();
+          console.log("Resposta do polling:", responseText);
+          
+          // If we get a video URL back, process it
+          if (responseText && (responseText.trim().startsWith('http') || responseText.includes('"video_url"') || responseText.includes('"url"'))) {
+            await processVideoResponse(responseText);
+            return; // Success, exit polling
+          }
+          
+          // If still processing, continue polling
+          if (response.status === 202 || responseText.toLowerCase().includes('processing') || responseText.toLowerCase().includes('accepted')) {
+            toast.info("Ainda processando... aguarde um momento.");
+            continue;
+          }
+        }
+      } catch (pollError) {
+        console.warn("Erro durante polling:", pollError);
+        // Continue polling on error, but don't throw yet
+      }
+    }
+    
+    // If we reach here, polling timed out
+    throw new Error("Timeout: O processamento do vídeo demorou mais que 5 minutos. O vídeo pode ainda estar sendo processado - verifique seu email ou tente novamente mais tarde.");
+  };
+
   const handleExportVideo = async () => {
     // Prevent multiple concurrent exports
     if (isExporting) {
@@ -475,6 +552,17 @@ const ScriptGen = () => {
         // Clear timeout if request completes
         clearTimeout(timeoutId);
 
+        // Handle 202 Accepted response
+        if (response.status === 202) {
+          const responseText = await response.text();
+          console.log("Resposta 202 Accepted recebida:", responseText);
+          toast.success("Processamento iniciado! Aguardando o resultado...");
+          
+          // Start polling for the final result
+          await pollForVideoResult(webhookUrl, payload);
+          return;
+        }
+
         if (!response.ok) {
           const errorText = await response.text();
           console.error("Erro do webhook:", response.status, response.statusText, errorText);
@@ -485,27 +573,8 @@ const ScriptGen = () => {
         const responseText = await response.text();
         console.log("Resposta bruta do webhook:", responseText);
         
-        // Check if response is a valid URL
-        if (responseText && responseText.trim().startsWith('http')) {
-          const videoUrl = responseText.trim();
-          setExportedVideoUrl(videoUrl);
-          toast.success("Vídeo processado com sucesso! Clique em 'Download Video' para baixar.");
-        } else {
-          // If not a direct URL, try to parse as JSON
-          try {
-            const jsonResponse = JSON.parse(responseText);
-            if (jsonResponse.video_url || jsonResponse.url) {
-              const videoUrl = jsonResponse.video_url || jsonResponse.url;
-              setExportedVideoUrl(videoUrl);
-              toast.success("Vídeo processado com sucesso! Clique em 'Download Video' para baixar.");
-            } else {
-              throw new Error("Resposta não contém URL do vídeo");
-            }
-          } catch (parseError) {
-            console.error("Erro ao analisar resposta do webhook:", parseError);
-            throw new Error(`Webhook retornou resposta inválida: ${responseText}`);
-          }
-        }
+        // Process immediate response with video URL
+        await processVideoResponse(responseText);
         
       } catch (fetchError) {
         clearTimeout(timeoutId);
@@ -521,8 +590,8 @@ const ScriptGen = () => {
     } catch (error) {
       console.error("Erro ao exportar vídeo:", error);
       toast.error(`Falha na exportação: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
-    } finally {
       setIsExporting(false);
+    } finally {
       setIsProcessing(false);
     }
   };
